@@ -808,6 +808,12 @@ export function ConcertApp({
           if (!open) setActive(null);
         }}
         onSave={saveLead}
+        onLeadChange={(lead) => {
+          setLeads((current) =>
+            current.map((item) => (item.id === lead.id ? lead : item))
+          );
+          setActive(lead);
+        }}
         onDelete={deleteLead}
         busy={busyId === active?.id}
       />
@@ -924,6 +930,11 @@ function LeadCard({
               {lead.committed > 0 ? (
                 <span className="text-xs font-medium text-primary">
                   {formatMoney(lead.committed)}
+                </span>
+              ) : null}
+              {(lead.attachments?.length ?? 0) > 0 ? (
+                <span className="text-xs text-muted-foreground">
+                  {lead.attachments.length} file{lead.attachments.length === 1 ? "" : "s"}
                 </span>
               ) : null}
             </div>

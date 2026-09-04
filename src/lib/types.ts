@@ -9,6 +9,15 @@ export type MemberPatch = Partial<Pick<Member, "name" | "phone" | "email">> & {
   actor?: string | null;
 };
 
+export type LeadAttachment = {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+  uploadedAt: string;
+  uploadedBy: string | null;
+};
+
 export type Lead = {
   id: string;
   company: string;
@@ -18,6 +27,7 @@ export type Lead = {
   committed: number;
   received: number;
   receivedBy: string | null;
+  attachments: LeadAttachment[];
   updatedAt: string | null;
   updatedBy: string | null;
 };

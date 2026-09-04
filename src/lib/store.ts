@@ -7,12 +7,21 @@ import type {
   Guest,
   GuestPatch,
   Lead,
+  LeadAttachment,
   LeadPatch,
   Member,
   MemberPatch,
   Settings,
 } from "@/lib/types";
 import { displayGuestName, normalizeGuestStatus } from "@/lib/types";
+import {
+  assertAllowedAttachment,
+  deleteAttachmentFile,
+  newAttachmentId,
+  removeLeadUploadDir,
+  safeDownloadName,
+  writeAttachmentFile,
+} from "@/lib/attachments";
 
 const LEADS_PATH = path.join(process.cwd(), "data", "leads.json");
 const GUESTS_PATH = path.join(process.cwd(), "data", "guests.json");
@@ -43,6 +52,17 @@ function stamp<T extends { updatedAt: string | null; updatedBy: string | null }>
   };
 }
 
+function normalizeAttachment(raw: Partial<LeadAttachment> & { id: string; fileName: string }): LeadAttachment {
+  return {
+    id: raw.id,
+    fileName: raw.fileName,
+    mimeType: raw.mimeType || "application/octet-stream",
+    size: Number(raw.size) || 0,
+    uploadedAt: raw.uploadedAt || new Date().toISOString(),
+    uploadedBy: raw.uploadedBy?.trim() || null,
+  };
+}
+
 function normalizeLead(lead: Partial<Lead> & { company: string; id: string }): Lead {
   return {
     id: lead.id,
@@ -53,6 +73,11 @@ function normalizeLead(lead: Partial<Lead> & { company: string; id: string }): L
     committed: parseMoney(lead.committed),
     received: parseMoney(lead.received),
     receivedBy: lead.receivedBy?.trim() || null,
+    attachments: Array.isArray(lead.attachments)
+      ? lead.attachments
+          .filter((item): item is LeadAttachment => Boolean(item?.id && item?.fileName))
+          .map((item) => normalizeAttachment(item))
+      : [],
     updatedAt: lead.updatedAt ?? null,
     updatedBy: lead.updatedBy ?? null,
   };
@@ -221,6 +246,7 @@ export function createLead(input: {
         committed: 0,
         received: 0,
         receivedBy: null,
+        attachments: [],
         updatedAt: null,
         updatedBy: null,
       }),
@@ -264,6 +290,7 @@ export function patchLead(id: string, patch: LeadPatch): Promise<Lead> {
           patch.committed === undefined ? current.committed : parseMoney(patch.committed),
         received,
         receivedBy,
+        attachments: current.attachments,
       }),
       patch.actor
     );
@@ -279,6 +306,91 @@ export function deleteLead(id: string): Promise<void> {
     const next = leads.filter((lead) => lead.id !== id);
     if (next.length === leads.length) throw new Error("Lead not found");
     await writeLeadsFile(next);
+    await removeLeadUploadDir(id);
+  });
+}
+
+export function addLeadAttachment(input: {
+  leadId: string;
+  fileName: string;
+  mimeType: string;
+  bytes: Buffer;
+  actor?: string | null;
+}): Promise<{ lead: Lead; attachment: LeadAttachment }> {
+  return enqueue(async () => {
+    const leads = await readLeadsFile();
+    const index = leads.findIndex((lead) => lead.id === input.leadId);
+    if (index === -1) throw new Error("Lead not found");
+    const current = leads[index];
+    const mimeType = assertAllowedAttachment(
+      input.fileName,
+      input.mimeType,
+      input.bytes.length
+    );
+    const attachment = normalizeAttachment({
+      id: newAttachmentId(),
+      fileName: safeDownloadName(input.fileName),
+      mimeType,
+      size: input.bytes.length,
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: input.actor?.trim() || null,
+    });
+    await writeAttachmentFile(
+      current.id,
+      attachment.id,
+      attachment.fileName,
+      input.bytes
+    );
+    const next = stamp(
+      normalizeLead({
+        ...current,
+        attachments: [...current.attachments, attachment],
+      }),
+      input.actor
+    );
+    leads[index] = next;
+    await writeLeadsFile(leads);
+    return { lead: next, attachment };
+  });
+}
+
+export function removeLeadAttachment(
+  leadId: string,
+  attachmentId: string,
+  actor?: string | null
+): Promise<Lead> {
+  return enqueue(async () => {
+    const leads = await readLeadsFile();
+    const index = leads.findIndex((lead) => lead.id === leadId);
+    if (index === -1) throw new Error("Lead not found");
+    const current = leads[index];
+    const attachment = current.attachments.find((item) => item.id === attachmentId);
+    if (!attachment) throw new Error("File not found");
+    await deleteAttachmentFile(leadId, attachment);
+    const next = stamp(
+      normalizeLead({
+        ...current,
+        attachments: current.attachments.filter((item) => item.id !== attachmentId),
+      }),
+      actor
+    );
+    leads[index] = next;
+    await writeLeadsFile(leads);
+    return next;
+  });
+}
+
+export function getLeadAttachment(
+  leadId: string,
+  attachmentId: string
+): Promise<{ lead: Lead; attachment: LeadAttachment }> {
+  return enqueue(async () => {
+    const leads = await readLeadsFile();
+    const lead = leads.find((item) => item.id === leadId);
+    if (!lead) throw new Error("Lead not found");
+    const attachment = lead.attachments.find((item) => item.id === attachmentId);
+    if (!attachment) throw new Error("File not found");
+    return { lead, attachment };
   });
 }
 
@@ -307,6 +419,7 @@ export function mergeSheetRows(
             committed: 0,
             received: 0,
             receivedBy: null,
+            attachments: [],
             updatedAt: null,
             updatedBy: null,
           }),

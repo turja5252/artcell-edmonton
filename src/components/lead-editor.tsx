@@ -14,6 +14,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { PersonChip } from "@/components/person-chip";
+import { LeadAttachments } from "@/components/lead-attachments";
 import { formatMoney, parseMoney } from "@/lib/money";
 import { MONEY_CHIPS, OUTCOME_CHIPS, type Lead } from "@/lib/types";
 
@@ -24,6 +25,7 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (id: string, patch: Partial<Lead> & { actor?: string }) => Promise<void>;
+  onLeadChange?: (lead: Lead) => void;
   onDelete?: (id: string) => Promise<void>;
   busy?: boolean;
 };
@@ -35,6 +37,7 @@ export function LeadEditor({
   open,
   onOpenChange,
   onSave,
+  onLeadChange,
   onDelete,
   busy,
 }: Props) {
@@ -49,6 +52,7 @@ export function LeadEditor({
       open={open}
       onOpenChange={onOpenChange}
       onSave={onSave}
+      onLeadChange={onLeadChange}
       onDelete={onDelete}
       busy={busy}
     />
@@ -62,6 +66,7 @@ function LeadEditorForm({
   open,
   onOpenChange,
   onSave,
+  onLeadChange,
   onDelete,
   busy,
 }: Props & { lead: Lead }) {
@@ -294,6 +299,12 @@ function LeadEditorForm({
               Save note
             </Button>
           </section>
+
+          <LeadAttachments
+            lead={lead}
+            me={me}
+            onLeadChange={(next) => onLeadChange?.(next)}
+          />
         </div>
 
         <SheetFooter className="mt-4 gap-2 sm:flex-col">

@@ -1,0 +1,120 @@
+import { createHash, randomBytes } from "crypto";
+import { promises as fs } from "fs";
+import path from "path";
+
+import type { LeadAttachment } from "@/lib/types";
+
+export const MAX_ATTACHMENT_BYTES = 12 * 1024 * 1024;
+
+const ALLOWED_MIME = new Set([
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/heic",
+  "image/heif",
+  "application/pdf",
+]);
+
+const EXT_MIME: Record<string, string> = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".webp": "image/webp",
+  ".gif": "image/gif",
+  ".heic": "image/heic",
+  ".heif": "image/heif",
+  ".pdf": "application/pdf",
+};
+
+export function uploadsRoot(): string {
+  return path.join(process.cwd(), "data", "uploads", "leads");
+}
+
+export function leadUploadDir(leadId: string): string {
+  return path.join(uploadsRoot(), sanitizeId(leadId));
+}
+
+export function attachmentPath(leadId: string, attachmentId: string, fileName: string): string {
+  return path.join(leadUploadDir(leadId), `${sanitizeId(attachmentId)}${extOf(fileName)}`);
+}
+
+function sanitizeId(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+
+function extOf(fileName: string): string {
+  const ext = path.extname(fileName).toLowerCase();
+  return EXT_MIME[ext] ? ext : "";
+}
+
+export function isPhotoMime(mimeType: string): boolean {
+  return mimeType.startsWith("image/");
+}
+
+export function isPdfMime(mimeType: string): boolean {
+  return mimeType === "application/pdf";
+}
+
+export function resolveMimeType(fileName: string, mimeType: string): string | null {
+  const normalized = (mimeType || "").toLowerCase().trim();
+  if (ALLOWED_MIME.has(normalized)) {
+    return normalized === "image/jpg" ? "image/jpeg" : normalized;
+  }
+  const fromExt = EXT_MIME[path.extname(fileName).toLowerCase()];
+  return fromExt ?? null;
+}
+
+export function assertAllowedAttachment(fileName: string, mimeType: string, size: number) {
+  if (size <= 0) throw new Error("Empty file");
+  if (size > MAX_ATTACHMENT_BYTES) throw new Error("File is too large (max 12 MB)");
+  const resolved = resolveMimeType(fileName, mimeType);
+  if (!resolved) throw new Error("Only photos and PDFs are allowed");
+  return resolved;
+}
+
+export function newAttachmentId(): string {
+  return `att-${Date.now().toString(36)}-${randomBytes(3).toString("hex")}`;
+}
+
+export function safeDownloadName(fileName: string): string {
+  return fileName.replace(/[\\/:*?"<>|]+/g, "_").trim() || "file";
+}
+
+export async function ensureLeadUploadDir(leadId: string) {
+  await fs.mkdir(leadUploadDir(leadId), { recursive: true });
+}
+
+export async function removeLeadUploadDir(leadId: string) {
+  await fs.rm(leadUploadDir(leadId), { recursive: true, force: true });
+}
+
+export async function writeAttachmentFile(
+  leadId: string,
+  attachmentId: string,
+  fileName: string,
+  bytes: Buffer
+) {
+  await ensureLeadUploadDir(leadId);
+  const target = attachmentPath(leadId, attachmentId, fileName);
+  await fs.writeFile(target, bytes);
+  return target;
+}
+
+export async function readAttachmentFile(
+  leadId: string,
+  attachment: LeadAttachment
+): Promise<Buffer> {
+  const target = attachmentPath(leadId, attachment.id, attachment.fileName);
+  return fs.readFile(target);
+}
+
+export async function deleteAttachmentFile(leadId: string, attachment: LeadAttachment) {
+  const target = attachmentPath(leadId, attachment.id, attachment.fileName);
+  await fs.rm(target, { force: true });
+}
+
+export function contentHash(bytes: Buffer): string {
+  return createHash("sha1").update(bytes).digest("hex").slice(0, 12);
+}
