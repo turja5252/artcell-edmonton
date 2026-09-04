@@ -9,6 +9,26 @@ export function useBlobStore(): boolean {
   return Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim());
 }
 
+function assertWritableStore(action: string) {
+  if (useBlobStore()) return;
+  if (process.env.VERCEL) {
+    throw new Error(
+      "Storage not connected yet. In Vercel → Storage, create a Blob store, connect it to this project, then Redeploy."
+    );
+  }
+  void action;
+}
+
+function mapFsWriteError(error: unknown): never {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/EROFS|read-only file system/i.test(message) || process.env.VERCEL) {
+    throw new Error(
+      "Storage not connected yet. In Vercel → Storage, create a Blob store, connect it to this project, then Redeploy."
+    );
+  }
+  throw error instanceof Error ? error : new Error(message);
+}
+
 async function streamToBuffer(stream: ReadableStream<Uint8Array> | null): Promise<Buffer> {
   if (!stream) return Buffer.alloc(0);
   const reader = stream.getReader();
@@ -63,9 +83,14 @@ export async function writeJsonFile(relativePath: string, value: unknown): Promi
     });
     return;
   }
-  const target = path.join(process.cwd(), "data", relativePath);
-  await fs.mkdir(path.dirname(target), { recursive: true });
-  await fs.writeFile(target, body, "utf8");
+  assertWritableStore("writeJsonFile");
+  try {
+    const target = path.join(process.cwd(), "data", relativePath);
+    await fs.mkdir(path.dirname(target), { recursive: true });
+    await fs.writeFile(target, body, "utf8");
+  } catch (error) {
+    mapFsWriteError(error);
+  }
 }
 
 export async function writeBinaryFile(
@@ -84,9 +109,14 @@ export async function writeBinaryFile(
     });
     return;
   }
-  const target = path.join(process.cwd(), "data", relativePath);
-  await fs.mkdir(path.dirname(target), { recursive: true });
-  await fs.writeFile(target, bytes);
+  assertWritableStore("writeBinaryFile");
+  try {
+    const target = path.join(process.cwd(), "data", relativePath);
+    await fs.mkdir(path.dirname(target), { recursive: true });
+    await fs.writeFile(target, bytes);
+  } catch (error) {
+    mapFsWriteError(error);
+  }
 }
 
 export async function readBinaryFile(relativePath: string): Promise<Buffer> {
