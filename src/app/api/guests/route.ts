@@ -19,6 +19,8 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as {
       name?: string;
+      firstName?: string;
+      lastName?: string;
       phone?: string;
       email?: string;
       assignedTo?: string | null;
@@ -27,6 +29,8 @@ export async function POST(request: Request) {
     };
     const guest = await createGuest({
       name: body.name ?? "",
+      firstName: body.firstName,
+      lastName: body.lastName,
       phone: body.phone,
       email: body.email,
       assignedTo: body.assignedTo,

@@ -6,13 +6,13 @@ import { parseCount, parseMoney } from "@/lib/money";
 import type {
   Guest,
   GuestPatch,
-  GuestStatus,
   Lead,
   LeadPatch,
   Member,
   MemberPatch,
   Settings,
 } from "@/lib/types";
+import { displayGuestName, normalizeGuestStatus } from "@/lib/types";
 
 const LEADS_PATH = path.join(process.cwd(), "data", "leads.json");
 const GUESTS_PATH = path.join(process.cwd(), "data", "guests.json");
@@ -20,14 +20,6 @@ const MEMBERS_PATH = path.join(process.cwd(), "data", "members.json");
 const SETTINGS_PATH = path.join(process.cwd(), "data", "settings.json");
 
 const DEFAULT_SETTINGS: Settings = { moneyTarget: 0, attendanceTarget: 0 };
-const GUEST_STATUS_SET = new Set<GuestStatus>([
-  "not_reached",
-  "reached",
-  "reminded",
-  "maybe",
-  "confirmed",
-  "declined",
-]);
 
 let queue: Promise<unknown> = Promise.resolve();
 
@@ -66,15 +58,34 @@ function normalizeLead(lead: Partial<Lead> & { company: string; id: string }): L
   };
 }
 
-function normalizeGuest(guest: Partial<Guest> & { name: string; id: string }): Guest {
-  const status = guest.status ?? "not_reached";
+function splitName(name: string): { firstName: string; lastName: string } {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { firstName: "", lastName: "" };
+  if (parts.length === 1) return { firstName: parts[0], lastName: "" };
+  return { firstName: parts.slice(0, -1).join(" "), lastName: parts[parts.length - 1] };
+}
+
+function normalizeGuest(
+  guest: Partial<Guest> & { id: string; name?: string; firstName?: string; lastName?: string }
+): Guest {
+  let firstName = guest.firstName?.trim() || "";
+  let lastName = guest.lastName?.trim() || "";
+  const rawName = guest.name?.trim() || "";
+  if (!firstName && !lastName && rawName) {
+    const split = splitName(rawName);
+    firstName = split.firstName;
+    lastName = split.lastName;
+  }
+  const name = displayGuestName({ firstName, lastName, name: rawName });
   return {
     id: guest.id,
-    name: guest.name,
+    firstName,
+    lastName,
+    name,
     phone: guest.phone?.trim() || "",
     email: guest.email?.trim() || "",
     assignedTo: guest.assignedTo?.trim() || null,
-    status: GUEST_STATUS_SET.has(status) ? status : "not_reached",
+    status: normalizeGuestStatus(guest.status),
     partySize: Math.max(1, parseCount(guest.partySize) || 1),
     ticketBought: Boolean(guest.ticketBought),
     lastContactedAt: guest.lastContactedAt ?? null,
@@ -311,7 +322,9 @@ export function mergeSheetRows(
 }
 
 export function createGuest(input: {
-  name: string;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
   phone?: string;
   email?: string;
   assignedTo?: string | null;
@@ -319,7 +332,10 @@ export function createGuest(input: {
   actor?: string | null;
 }): Promise<Guest> {
   return enqueue(async () => {
-    const name = input.name.trim();
+    const firstName = input.firstName?.trim() || "";
+    const lastName = input.lastName?.trim() || "";
+    const name =
+      `${firstName} ${lastName}`.trim() || input.name?.trim() || "";
     if (!name) throw new Error("Name is required");
     const guests = await readGuestsFile();
     const guest = stamp(
@@ -328,11 +344,13 @@ export function createGuest(input: {
           name,
           guests.map((item) => item.id)
         ),
+        firstName,
+        lastName,
         name,
         phone: input.phone ?? "",
         email: input.email ?? "",
         assignedTo: input.assignedTo?.trim() || null,
-        status: "not_reached",
+        status: "not_called",
         partySize: input.partySize ?? 1,
         ticketBought: false,
         lastContactedAt: null,
@@ -354,10 +372,17 @@ export function patchGuest(id: string, patch: GuestPatch): Promise<Guest> {
     const index = guests.findIndex((guest) => guest.id === id);
     if (index === -1) throw new Error("Guest not found");
     const current = guests[index];
+    const firstName =
+      patch.firstName === undefined ? current.firstName : patch.firstName.trim();
+    const lastName =
+      patch.lastName === undefined ? current.lastName : patch.lastName.trim();
+    const nameFromParts = `${firstName} ${lastName}`.trim();
     const next = stamp(
       normalizeGuest({
         ...current,
-        name: patch.name?.trim() || current.name,
+        firstName,
+        lastName,
+        name: nameFromParts || patch.name?.trim() || current.name,
         phone: patch.phone === undefined ? current.phone : patch.phone,
         email: patch.email === undefined ? current.email : patch.email,
         assignedTo:

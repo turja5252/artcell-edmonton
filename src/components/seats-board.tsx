@@ -1,25 +1,28 @@
 "use client";
 
+import { Phone } from "lucide-react";
+
 import { PersonChip } from "@/components/person-chip";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { formatSeats } from "@/lib/money";
 import { formatTime } from "@/lib/people";
 import type { Guest, GuestStatus } from "@/lib/types";
-import { GUEST_STATUSES } from "@/lib/types";
+import { GUEST_STATUSES, displayGuestName, telHref } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-type Filter = "all" | "not_reached" | "reached" | "maybe" | "confirmed" | "mine";
+export type SeatFilter = "all" | "not_called" | "confirmed" | "tentative" | "declined" | "mine";
 
 type Props = {
   guests: Guest[];
   target: number;
   me: string;
-  filter: Filter;
-  onFilter: (filter: Filter) => void;
+  filter: SeatFilter;
+  onFilter: (filter: SeatFilter) => void;
   onSetTarget: () => void;
   onOpen: (guest: Guest) => void;
   onClaim: (guest: Guest) => void;
   onStatus: (guest: Guest, status: GuestStatus) => void;
+  onPartySize: (guest: Guest, partySize: number) => void;
 };
 
 export function SeatsBoard({
@@ -32,14 +35,14 @@ export function SeatsBoard({
   onOpen,
   onClaim,
   onStatus,
+  onPartySize,
 }: Props) {
   const seats = (status: GuestStatus) =>
     guests.filter((guest) => guest.status === status).reduce((sum, guest) => sum + guest.partySize, 0);
 
   const confirmed = seats("confirmed");
-  const maybe = seats("maybe");
-  const reached = seats("reached");
-  const notReached = seats("not_reached");
+  const tentative = seats("tentative");
+  const notCalled = guests.filter((guest) => guest.status === "not_called").length;
   const remaining = target > 0 ? Math.max(0, target - confirmed) : 0;
   const percent = target > 0 ? Math.min(100, Math.round((confirmed / target) * 100)) : 0;
 
@@ -49,21 +52,45 @@ export function SeatsBoard({
       if (filter === "all") return true;
       return guest.status === filter;
     })
-    .sort((a, b) => statusRank(a.status) - statusRank(b.status) || a.name.localeCompare(b.name));
+    .sort(
+      (a, b) =>
+        statusRank(a.status) - statusRank(b.status) ||
+        displayGuestName(a).localeCompare(displayGuestName(b))
+    );
 
-  const filters: { id: Filter; label: string; count: number }[] = [
-    { id: "not_reached", label: "Not reached", count: guests.filter((g) => g.status === "not_reached").length },
-    { id: "reached", label: "Reached", count: guests.filter((g) => g.status === "reached").length },
-    { id: "maybe", label: "Maybe", count: guests.filter((g) => g.status === "maybe").length },
-    { id: "confirmed", label: "In", count: guests.filter((g) => g.status === "confirmed").length },
-    { id: "mine", label: me ? me.split(" ")[0] : "Mine", count: me ? guests.filter((g) => g.assignedTo === me).length : 0 },
+  const filters: { id: SeatFilter; label: string; count: number }[] = [
+    {
+      id: "not_called",
+      label: "Not called",
+      count: guests.filter((g) => g.status === "not_called").length,
+    },
+    {
+      id: "confirmed",
+      label: "Confirmed",
+      count: guests.filter((g) => g.status === "confirmed").length,
+    },
+    {
+      id: "tentative",
+      label: "Tentative",
+      count: guests.filter((g) => g.status === "tentative").length,
+    },
+    {
+      id: "declined",
+      label: "Declined",
+      count: guests.filter((g) => g.status === "declined").length,
+    },
+    {
+      id: "mine",
+      label: me ? me.split(" ")[0] : "Mine",
+      count: me ? guests.filter((g) => g.assignedTo === me).length : 0,
+    },
     { id: "all", label: "All", count: guests.length },
   ];
 
   return (
     <div className="space-y-4 pb-24">
       <p className="text-sm text-muted-foreground">
-        Invite list for filling the room. Tap a name, mark what they said, and the seat count updates.
+        Call the list, log confirmed / tentative / declined, and how many people are coming.
       </p>
 
       <div className="grid grid-cols-2 gap-2">
@@ -75,7 +102,7 @@ export function SeatsBoard({
           />
         </button>
         <HeroStat label="Remaining" value={target ? formatSeats(remaining) : "—"} />
-        <HeroStat label="Maybe" value={formatSeats(maybe)} />
+        <HeroStat label="Tentative" value={formatSeats(tentative)} />
       </div>
 
       <div className="rounded-2xl border border-border/80 bg-card/80 p-4">
@@ -84,7 +111,7 @@ export function SeatsBoard({
             {target ? `${percent}% of the room` : "Set a seat target for the venue"}
           </span>
           <span className="tabular-nums text-muted-foreground">
-            {formatSeats(notReached + reached)} still in outreach
+            {notCalled} still to call
           </span>
         </div>
         <div className="mt-2 h-3 overflow-hidden rounded-full bg-muted">
@@ -113,68 +140,143 @@ export function SeatsBoard({
       {visible.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border p-6 text-center">
           <p className="font-medium">
-            {guests.length === 0 ? "No one on the invite list yet" : "No matches in this filter"}
+            {guests.length === 0 ? "No one on the call list yet" : "No matches in this filter"}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Tap + to add a person, family, or group you still need to reach.
+            Tap + to add a person with name, phone, and email.
           </p>
         </div>
       ) : (
         <ul className="space-y-2">
-          {visible.map((guest) => (
-            <li key={guest.id}>
-              <article className="rounded-2xl border border-border/80 bg-card/80 p-3">
-                <button type="button" onClick={() => onOpen(guest)} className="w-full text-left">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h2 className="text-lg leading-tight font-semibold">{guest.name}</h2>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                        {guest.assignedTo ? (
-                          <PersonChip name={guest.assignedTo} />
+          {visible.map((guest) => {
+            const callHref = telHref(guest.phone);
+            return (
+              <li key={guest.id}>
+                <article className="rounded-2xl border border-border/80 bg-card/80 p-3">
+                  <button type="button" onClick={() => onOpen(guest)} className="w-full text-left">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h2 className="text-lg leading-tight font-semibold">
+                          {displayGuestName(guest)}
+                        </h2>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                          {guest.assignedTo ? (
+                            <PersonChip name={guest.assignedTo} />
+                          ) : (
+                            <span className="text-xs text-primary">Unassigned</span>
+                          )}
+                          <span className="text-xs text-muted-foreground">
+                            {guest.partySize}{" "}
+                            {guest.partySize === 1 ? "member" : "members"}
+                          </span>
+                          <StatusPill status={guest.status} />
+                        </div>
+                        {guest.phone ? (
+                          <p className="mt-1 text-sm text-muted-foreground">{guest.phone}</p>
                         ) : (
-                          <span className="text-xs text-primary">Nobody claimed this yet</span>
+                          <p className="mt-1 text-sm text-muted-foreground">No phone on file</p>
                         )}
-                        <span className="text-xs text-muted-foreground">
-                          {guest.partySize} {guest.partySize === 1 ? "seat" : "seats"}
-                        </span>
-                        <StatusPill status={guest.status} />
+                        {guest.email ? (
+                          <p className="text-sm text-muted-foreground">{guest.email}</p>
+                        ) : null}
                       </div>
                     </div>
+                    {guest.notes ? (
+                      <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
+                        {guest.notes}
+                      </p>
+                    ) : null}
+                    {guest.updatedAt ? (
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Updated {formatTime(guest.updatedAt)}
+                        {guest.updatedBy ? ` · ${guest.updatedBy}` : ""}
+                      </p>
+                    ) : null}
+                  </button>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    {callHref ? (
+                      <a
+                        href={callHref}
+                        className={cn(buttonVariants({ variant: "default" }), "h-12 gap-2")}
+                      >
+                        <Phone className="size-4" />
+                        Call
+                      </a>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-12"
+                        onClick={() => onOpen(guest)}
+                      >
+                        Add phone
+                      </Button>
+                    )}
+                    {!guest.assignedTo ? (
+                      <Button type="button" variant="secondary" className="h-12" onClick={() => onClaim(guest)}>
+                        Assign me
+                      </Button>
+                    ) : (
+                      <Button type="button" variant="outline" className="h-12" onClick={() => onOpen(guest)}>
+                        Update
+                      </Button>
+                    )}
                   </div>
-                  {guest.notes ? (
-                    <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{guest.notes}</p>
-                  ) : null}
-                  {guest.updatedAt ? (
-                    <p className="mt-1 text-[11px] text-muted-foreground">
-                      Updated {formatTime(guest.updatedAt)}
-                      {guest.updatedBy ? ` · ${guest.updatedBy}` : ""}
-                    </p>
-                  ) : null}
-                </button>
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  {!guest.assignedTo ? (
-                    <Button type="button" className="h-12" onClick={() => onClaim(guest)}>
-                      I’ll take this
+
+                  <div className="mt-2 grid grid-cols-3 gap-2">
+                    <Button
+                      type="button"
+                      variant={guest.status === "confirmed" ? "default" : "outline"}
+                      className="h-11 text-xs sm:text-sm"
+                      onClick={() => onStatus(guest, "confirmed")}
+                    >
+                      Confirmed
                     </Button>
-                  ) : (
-                    <Button type="button" variant="outline" className="h-12" onClick={() => onOpen(guest)}>
-                      Add note
+                    <Button
+                      type="button"
+                      variant={guest.status === "tentative" ? "default" : "outline"}
+                      className="h-11 text-xs sm:text-sm"
+                      onClick={() => onStatus(guest, "tentative")}
+                    >
+                      Tentative
                     </Button>
-                  )}
-                  <Button
-                    type="button"
-                    variant={guest.status === "confirmed" ? "outline" : "secondary"}
-                    className="h-12"
-                    onClick={() =>
-                      onStatus(guest, guest.status === "confirmed" ? "reached" : "confirmed")
-                    }
-                  >
-                    {guest.status === "confirmed" ? "Undo confirm" : "They’re in"}
-                  </Button>
-                </div>
-              </article>
-            </li>
-          ))}
+                    <Button
+                      type="button"
+                      variant={guest.status === "declined" ? "default" : "outline"}
+                      className="h-11 text-xs sm:text-sm"
+                      onClick={() => onStatus(guest, "declined")}
+                    >
+                      Declined
+                    </Button>
+                  </div>
+
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground shrink-0">Members</span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="size-10"
+                      onClick={() => onPartySize(guest, Math.max(1, guest.partySize - 1))}
+                    >
+                      −
+                    </Button>
+                    <span className="min-w-8 text-center text-base tabular-nums font-medium">
+                      {guest.partySize}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="size-10"
+                      onClick={() => onPartySize(guest, guest.partySize + 1)}
+                    >
+                      +
+                    </Button>
+                  </div>
+                </article>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
@@ -192,10 +294,9 @@ function StatusPill({ status }: { status: GuestStatus }) {
       className={cn(
         "rounded-full px-2 py-0.5 text-xs",
         status === "confirmed" && "bg-emerald-500/15 text-emerald-300",
-        status === "maybe" && "bg-primary/15 text-primary",
+        status === "tentative" && "bg-amber-500/15 text-amber-300",
         status === "declined" && "bg-destructive/15 text-destructive",
-        status === "reached" && "bg-sky-500/15 text-sky-300",
-        status === "not_reached" && "bg-muted text-muted-foreground"
+        status === "not_called" && "bg-muted text-muted-foreground"
       )}
     >
       {label}

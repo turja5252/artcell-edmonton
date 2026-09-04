@@ -7,7 +7,7 @@ GitHub: [turja5252/artcell-edmonton](https://github.com/turja5252/artcell-edmont
 
 - **Calls** — claim a company, mark done, leave what happened
 - **Money** — target, pledged, received
-- **Seats** — invite list and confirmations
+- **Seats** — call list with first/last name, phone, email, team assignment, Call button, and confirmed / tentative / declined + member count
 - **Team** — add organizers
 - **Songs** — setlist cues
 

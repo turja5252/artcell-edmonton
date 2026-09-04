@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { Phone } from "lucide-react";
 
 import { PersonChip } from "@/components/person-chip";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -14,7 +15,14 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { GUEST_STATUSES, type Guest, type GuestStatus } from "@/lib/types";
+import {
+  GUEST_STATUSES,
+  displayGuestName,
+  telHref,
+  type Guest,
+  type GuestStatus,
+} from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 type Props = {
   guest: Guest | null;
@@ -59,26 +67,47 @@ function GuestEditorForm({
   onSave,
   busy,
 }: Props & { guest: Guest }) {
+  const [firstName, setFirstName] = useState(guest.firstName || "");
+  const [lastName, setLastName] = useState(guest.lastName || "");
+  const [phone, setPhone] = useState(guest.phone || "");
+  const [email, setEmail] = useState(guest.email || "");
   const [assignedTo, setAssignedTo] = useState(guest.assignedTo ?? "");
   const [status, setStatus] = useState<GuestStatus>(guest.status);
   const [partySize, setPartySize] = useState(String(guest.partySize));
   const [notes, setNotes] = useState(guest.notes);
+  const callHref = telHref(phone);
 
   async function persist(next: {
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    email?: string;
     assignedTo?: string;
     status?: GuestStatus;
     partySize?: string;
     notes?: string;
   }) {
+    const nextFirst = next.firstName ?? firstName;
+    const nextLast = next.lastName ?? lastName;
+    const nextPhone = next.phone ?? phone;
+    const nextEmail = next.email ?? email;
     const nextAssigned = next.assignedTo ?? assignedTo;
     const nextStatus = next.status ?? status;
     const nextSize = next.partySize ?? partySize;
     const nextNotes = next.notes ?? notes;
+    setFirstName(nextFirst);
+    setLastName(nextLast);
+    setPhone(nextPhone);
+    setEmail(nextEmail);
     setAssignedTo(nextAssigned);
     setStatus(nextStatus);
     setPartySize(nextSize);
     setNotes(nextNotes);
     await onSave(guest.id, {
+      firstName: nextFirst,
+      lastName: nextLast,
+      phone: nextPhone,
+      email: nextEmail,
       assignedTo: nextAssigned || null,
       status: nextStatus,
       partySize: Math.max(1, Number(nextSize) || 1),
@@ -91,16 +120,70 @@ function GuestEditorForm({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="max-h-[92vh] overflow-y-auto px-4 pb-6">
         <SheetHeader className="pr-8 text-left">
-          <SheetTitle className="font-heading text-2xl tracking-wide">{guest.name}</SheetTitle>
+          <SheetTitle className="font-heading text-2xl tracking-wide">
+            {displayGuestName({ firstName, lastName, name: guest.name })}
+          </SheetTitle>
           <SheetDescription>
-            Mark the invite, how many seats, and who is following up.
+            Call them, set the response, how many members, and who on the team owns this.
           </SheetDescription>
         </SheetHeader>
 
         <div className="mt-4 space-y-5">
+          {callHref ? (
+            <a
+              href={callHref}
+              className={cn(buttonVariants({ variant: "default" }), "h-14 w-full gap-2 text-base")}
+            >
+              <Phone className="size-5" />
+              Call {phone}
+            </a>
+          ) : null}
+
           <section className="space-y-2">
             <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              Status
+              Contact
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <Input
+                value={firstName}
+                onChange={(event) => setFirstName(event.target.value)}
+                placeholder="First name"
+                className="h-12 text-base"
+              />
+              <Input
+                value={lastName}
+                onChange={(event) => setLastName(event.target.value)}
+                placeholder="Last name"
+                className="h-12 text-base"
+              />
+            </div>
+            <Input
+              value={phone}
+              onChange={(event) => setPhone(event.target.value)}
+              placeholder="Phone number"
+              inputMode="tel"
+              className="h-12 text-base"
+            />
+            <Input
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="Email (optional)"
+              inputMode="email"
+              className="h-12 text-base"
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-12 w-full"
+              onClick={() => persist({ firstName, lastName, phone, email })}
+            >
+              Save contact
+            </Button>
+          </section>
+
+          <section className="space-y-2">
+            <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              Call response
             </p>
             <div className="grid grid-cols-2 gap-2">
               {GUEST_STATUSES.map((item) => (
@@ -119,14 +202,16 @@ function GuestEditorForm({
 
           <section className="space-y-2">
             <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              How many seats
+              How many members
             </p>
             <div className="flex items-center gap-2">
               <Button
                 type="button"
                 variant="outline"
                 className="size-12"
-                onClick={() => persist({ partySize: String(Math.max(1, (Number(partySize) || 1) - 1)) })}
+                onClick={() =>
+                  persist({ partySize: String(Math.max(1, (Number(partySize) || 1) - 1)) })
+                }
               >
                 −
               </Button>
@@ -152,7 +237,7 @@ function GuestEditorForm({
 
           <section className="space-y-2">
             <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              Who is on this
+              Team assignment
             </p>
             <div className="flex flex-wrap gap-2">
               {people.map((person) => (
@@ -171,10 +256,15 @@ function GuestEditorForm({
               <Input
                 value={assignedTo}
                 onChange={(event) => setAssignedTo(event.target.value)}
-                placeholder="Type a name"
+                placeholder="Type a team name"
                 className="h-12 text-base"
               />
-              <Button type="button" variant="secondary" className="h-12 px-4" onClick={() => persist({ assignedTo })}>
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-12 px-4"
+                onClick={() => persist({ assignedTo })}
+              >
                 Save
               </Button>
             </div>
@@ -187,7 +277,7 @@ function GuestEditorForm({
             <Textarea
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
-              placeholder="How you reached them, tickets, kids, dietary…"
+              placeholder="What they said, callback time, kids…"
               className="min-h-24 text-base"
             />
             <Button type="button" variant="secondary" className="h-12 w-full" onClick={() => persist({ notes })}>
@@ -202,9 +292,11 @@ function GuestEditorForm({
             className="h-14 w-full text-base"
             variant={status === "confirmed" ? "outline" : "default"}
             disabled={busy}
-            onClick={() => persist({ status: status === "confirmed" ? "reached" : "confirmed" })}
+            onClick={() =>
+              persist({ status: status === "confirmed" ? "not_called" : "confirmed" })
+            }
           >
-            {status === "confirmed" ? "Mark not confirmed" : "Confirm they’re coming"}
+            {status === "confirmed" ? "Clear confirmation" : "Mark confirmed"}
           </Button>
         </SheetFooter>
       </SheetContent>

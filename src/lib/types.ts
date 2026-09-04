@@ -32,15 +32,20 @@ export type LeadPatch = Partial<
 };
 
 export type GuestStatus =
+  | "not_called"
+  | "confirmed"
+  | "tentative"
+  | "declined"
+  // legacy values kept for older saved data
   | "not_reached"
   | "reached"
   | "reminded"
-  | "maybe"
-  | "confirmed"
-  | "declined";
+  | "maybe";
 
 export type Guest = {
   id: string;
+  firstName: string;
+  lastName: string;
   name: string;
   phone: string;
   email: string;
@@ -57,6 +62,8 @@ export type Guest = {
 export type GuestPatch = Partial<
   Pick<
     Guest,
+    | "firstName"
+    | "lastName"
     | "name"
     | "phone"
     | "email"
@@ -94,13 +101,35 @@ export const OUTCOME_CHIPS = [
 ] as const;
 
 export const GUEST_STATUSES: { id: GuestStatus; label: string }[] = [
-  { id: "not_reached", label: "Not reached" },
-  { id: "reached", label: "Reached" },
-  { id: "reminded", label: "Reminded" },
-  { id: "maybe", label: "Maybe" },
+  { id: "not_called", label: "Not called" },
   { id: "confirmed", label: "Confirmed" },
+  { id: "tentative", label: "Tentative" },
   { id: "declined", label: "Declined" },
 ];
+
+export function displayGuestName(guest: {
+  firstName?: string;
+  lastName?: string;
+  name?: string;
+}): string {
+  const combined = `${guest.firstName ?? ""} ${guest.lastName ?? ""}`.trim();
+  return combined || guest.name || "Unknown";
+}
+
+export function telHref(phone: string): string | null {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length < 10) return null;
+  const local = digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
+  if (local.length !== 10) return null;
+  return `tel:+1${local}`;
+}
+
+export function normalizeGuestStatus(status: string | undefined | null): GuestStatus {
+  if (status === "confirmed") return "confirmed";
+  if (status === "tentative" || status === "maybe") return "tentative";
+  if (status === "declined") return "declined";
+  return "not_called";
+}
 
 export const MONEY_CHIPS = [250, 500, 1000, 2000, 5000];
 

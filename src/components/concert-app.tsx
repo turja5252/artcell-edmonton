@@ -22,13 +22,13 @@ import {
   Wallet,
 } from "lucide-react";
 
-import { AddGuest } from "@/components/add-guest";
+import { AddGuest, type AddGuestInput } from "@/components/add-guest";
 import { AddLead } from "@/components/add-lead";
 import { GuestEditor } from "@/components/guest-editor";
 import { LeadEditor } from "@/components/lead-editor";
 import { MoneyBoard } from "@/components/money-board";
 import { PersonChip } from "@/components/person-chip";
-import { SeatsBoard } from "@/components/seats-board";
+import { SeatsBoard, type SeatFilter } from "@/components/seats-board";
 import { SetlistBoard } from "@/components/setlist-board";
 import { TargetEditor } from "@/components/target-editor";
 import { TeamBoard } from "@/components/team-board";
@@ -38,6 +38,7 @@ import { Input } from "@/components/ui/input";
 import { formatMoney } from "@/lib/money";
 import { formatTime, uniquePeople } from "@/lib/people";
 import type { Guest, GuestStatus, Lead, Member, Settings } from "@/lib/types";
+import { displayGuestName } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const ME_KEY = "artcell-edmonton-me";
@@ -63,7 +64,6 @@ function writeMe(name: string) {
 
 type Tab = "outreach" | "money" | "seats" | "team" | "setlist";
 type Filter = "mine" | "open" | "unassigned" | "done" | "all";
-type SeatFilter = "all" | "not_reached" | "reached" | "maybe" | "confirmed" | "mine";
 
 function matches(lead: Lead, query: string, filter: Filter, me: string) {
   const haystack = `${lead.company} ${lead.assignedTo ?? ""} ${lead.outcome}`.toLowerCase();
@@ -100,7 +100,7 @@ export function ConcertApp({
   const [settings, setSettings] = useState<Settings>(initialSettings);
   const [tab, setTab] = useState<Tab>("outreach");
   const [filter, setFilter] = useState<Filter>("open");
-  const [seatFilter, setSeatFilter] = useState<SeatFilter>("not_reached");
+  const [seatFilter, setSeatFilter] = useState<SeatFilter>("not_called");
   const [query, setQuery] = useState("");
   const [error, setError] = useState(initialError);
   const [whoForced, setWhoForced] = useState(false);
@@ -347,16 +347,16 @@ export function ConcertApp({
     }
   }
 
-  async function addGuest(name: string, assignedTo: string | null, partySize: number) {
+  async function addGuest(input: AddGuestInput) {
     const response = await fetch("/api/guests", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, assignedTo, partySize, actor: me }),
+      body: JSON.stringify({ ...input, actor: me }),
     });
     const data = (await response.json()) as { guest?: Guest; error?: string };
     if (!response.ok) throw new Error(data.error || "Could not add");
     if (data.guest) setGuests((current) => [...current, data.guest!]);
-    setToast(`${name} is on the invite list`);
+    setToast(`${displayGuestName(data.guest ?? input)} is on the call list`);
   }
 
   async function saveSettings(patch: Partial<Settings>) {
@@ -606,10 +606,13 @@ export function ConcertApp({
                 return;
               }
               void saveGuest(guest.id, { assignedTo: me, actor: me });
-              setToast(`You’re on ${guest.name}`);
+              setToast(`You’re on ${displayGuestName(guest)}`);
             }}
             onStatus={(guest, status: GuestStatus) => {
               void saveGuest(guest.id, { status, actor: me });
+            }}
+            onPartySize={(guest, partySize) => {
+              void saveGuest(guest.id, { partySize, actor: me });
             }}
           />
         </section>
