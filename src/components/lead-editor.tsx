@@ -16,6 +16,7 @@ import {
 import { PersonChip } from "@/components/person-chip";
 import { LeadAttachments } from "@/components/lead-attachments";
 import { formatMoney, parseMoney } from "@/lib/money";
+import { isTeamAdmin } from "@/lib/team-admin";
 import { MONEY_CHIPS, OUTCOME_CHIPS, type Lead } from "@/lib/types";
 
 type Props = {
@@ -167,7 +168,7 @@ function LeadEditorForm({
                   <PersonChip name={person} />
                 </Button>
               ))}
-              {me && !people.includes(me) && (
+              {me && !people.includes(me) && !isTeamAdmin(me) && (
                 <Button
                   type="button"
                   variant={assignedTo === me ? "default" : "outline"}

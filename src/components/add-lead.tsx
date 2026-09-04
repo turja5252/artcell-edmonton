@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { isTeamAdmin } from "@/lib/team-admin";
 import {
   Sheet,
   SheetContent,
@@ -23,7 +24,7 @@ type Props = {
 
 export function AddLead({ open, me, people, onOpenChange, onAdd }: Props) {
   const [company, setCompany] = useState("");
-  const [assignedTo, setAssignedTo] = useState(me);
+  const [assignedTo, setAssignedTo] = useState(isTeamAdmin(me) ? "" : me);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 

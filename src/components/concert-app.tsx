@@ -17,6 +17,7 @@ import {
   RefreshCw,
   Search,
   Share2,
+  Shield,
   Ticket,
   Users,
   Wallet,
@@ -173,6 +174,10 @@ export function ConcertApp({
     writeMe(name);
     setWhoForced(false);
     setWhoSkipped(false);
+    if (isTeamAdmin(name)) {
+      setTab("team");
+      return;
+    }
     setFilter("mine");
   }
 
@@ -573,13 +578,30 @@ export function ConcertApp({
       <button
         type="button"
         onClick={() => setWhoOpen(true)}
-        className="relative z-10 mt-4 flex w-full items-center justify-between gap-3 rounded-2xl border border-border/80 bg-card/70 px-3 py-3 text-left active:bg-card"
+        className={cn(
+          "relative z-10 mt-4 flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-left active:bg-card",
+          isTeamAdmin(me)
+            ? "border-primary/70 bg-primary/10"
+            : "border-border/80 bg-card/70"
+        )}
       >
-        <span className="text-sm text-muted-foreground">Updating as</span>
-        {me ? (
+        <span className="min-w-0">
+          <span className="block text-sm text-muted-foreground">Updating as</span>
+          <span className="mt-0.5 block text-xs text-muted-foreground">
+            Who are you? Admin is the first choice
+          </span>
+        </span>
+        {isTeamAdmin(me) ? (
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border-2 border-primary bg-primary px-3 py-1 text-sm font-semibold text-primary-foreground">
+            <Shield className="size-3.5" />
+            Admin
+          </span>
+        ) : me ? (
           <PersonChip name={me} />
         ) : (
-          <span className="text-sm font-medium text-primary">Tap to pick your name</span>
+          <span className="shrink-0 text-sm font-medium text-primary">
+            Tap your name or Admin
+          </span>
         )}
       </button>
 
@@ -651,8 +673,11 @@ export function ConcertApp({
                     busy={busyId === lead.id}
                     onOpen={() => setActive(lead)}
                     onClaim={() => {
-                      if (!me) {
+                      if (!me || isTeamAdmin(me)) {
                         setWhoOpen(true);
+                        if (isTeamAdmin(me)) {
+                          setToast("Pick your name to claim a call — Admin only manages the roster");
+                        }
                         return;
                       }
                       void saveLead(lead.id, { assignedTo: me, actor: me });
@@ -696,8 +721,11 @@ export function ConcertApp({
             onEditTickets={() => setTicketsOpen(true)}
             onOpen={(guest) => setActiveGuest(guest)}
             onClaim={(guest) => {
-              if (!me) {
+              if (!me || isTeamAdmin(me)) {
                 setWhoOpen(true);
+                if (isTeamAdmin(me)) {
+                  setToast("Pick your name to claim a guest — Admin only manages the roster");
+                }
                 return;
               }
               void saveGuest(guest.id, { assignedTo: me, actor: me });

@@ -20,6 +20,7 @@ import {
   pickPhoneContacts,
   type PhoneContact,
 } from "@/lib/phone-contacts";
+import { isTeamAdmin } from "@/lib/team-admin";
 import { cn } from "@/lib/utils";
 
 export type AddGuestInput = {
@@ -49,7 +50,7 @@ export function AddGuest({ open, me, people, onOpenChange, onAdd, onAddMany }: P
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [assignedTo, setAssignedTo] = useState(me);
+  const [assignedTo, setAssignedTo] = useState(isTeamAdmin(me) ? "" : me);
   const [partySize, setPartySize] = useState("1");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
