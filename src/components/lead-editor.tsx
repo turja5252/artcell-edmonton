@@ -61,6 +61,7 @@ function LeadEditorForm({
   onSave,
   busy,
 }: Props & { lead: Lead }) {
+  const [company, setCompany] = useState(lead.company);
   const [outcome, setOutcome] = useState(lead.outcome);
   const [assignedTo, setAssignedTo] = useState(lead.assignedTo ?? "");
   const [done, setDone] = useState(lead.done);
@@ -70,6 +71,7 @@ function LeadEditorForm({
   const leadId = lead.id;
 
   async function persist(next: {
+    company?: string;
     outcome?: string;
     assignedTo?: string;
     done?: boolean;
@@ -77,12 +79,14 @@ function LeadEditorForm({
     received?: string;
     receivedBy?: string;
   }) {
+    const nextCompany = (next.company ?? company).trim() || lead.company;
     const nextOutcome = next.outcome ?? outcome;
     const nextAssigned = next.assignedTo ?? assignedTo;
     const nextDone = next.done ?? done;
     const nextCommitted = next.committed ?? committed;
     const nextReceived = next.received ?? received;
     const nextReceivedBy = next.receivedBy ?? receivedBy;
+    setCompany(nextCompany);
     setOutcome(nextOutcome);
     setAssignedTo(nextAssigned);
     setDone(nextDone);
@@ -90,6 +94,7 @@ function LeadEditorForm({
     setReceived(nextReceived);
     setReceivedBy(nextReceivedBy);
     await onSave(leadId, {
+      company: nextCompany,
       outcome: nextOutcome,
       assignedTo: nextAssigned || null,
       done: nextDone,
@@ -105,7 +110,7 @@ function LeadEditorForm({
       <SheetContent side="bottom" className="max-h-[92vh] overflow-y-auto px-4 pb-6">
         <SheetHeader className="pr-8 text-left">
           <SheetTitle className="font-heading text-2xl tracking-wide">
-            {lead.company}
+            {company || lead.company}
           </SheetTitle>
           <SheetDescription>
             Tap a result, claim it, or mark it done. Everyone on this link sees the update.
@@ -113,6 +118,28 @@ function LeadEditorForm({
         </SheetHeader>
 
         <div className="mt-4 space-y-5">
+          <section className="space-y-2">
+            <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              Entry name
+            </p>
+            <div className="flex gap-2">
+              <Input
+                value={company}
+                onChange={(event) => setCompany(event.target.value)}
+                placeholder="Company or person"
+                className="h-12 text-base"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-12 px-4"
+                onClick={() => persist({ company })}
+              >
+                Save
+              </Button>
+            </div>
+          </section>
+
           <section className="space-y-2">
             <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
               Who is on this
