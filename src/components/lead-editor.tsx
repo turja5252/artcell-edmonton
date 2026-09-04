@@ -296,18 +296,11 @@ function LeadEditorForm({
                   setReceivedByTouched(true);
                   setReceivedBy(event.target.value);
                 }}
+                onBlur={() => void persist({ receivedBy })}
                 placeholder="Whoever is on this, unless you change it"
                 className="h-12 text-base"
               />
             </div>
-            <Button
-              type="button"
-              variant="secondary"
-              className="h-12 w-full"
-              onClick={() => persist({ committed, received, receivedBy })}
-            >
-              Save money
-            </Button>
           </section>
 
           <section className="space-y-2">
@@ -343,17 +336,10 @@ function LeadEditorForm({
             <Textarea
               value={outcome}
               onChange={(event) => setOutcome(event.target.value)}
+              onBlur={() => void persist({ outcome })}
               placeholder="Or type a note — amount, contact, follow-up…"
               className="min-h-24 text-base"
             />
-            <Button
-              type="button"
-              variant="secondary"
-              className="h-12 w-full"
-              onClick={() => persist({ outcome })}
-            >
-              Save note
-            </Button>
           </section>
 
           <LeadAttachments
@@ -367,6 +353,25 @@ function LeadEditorForm({
           <Button
             type="button"
             className="h-14 w-full text-base"
+            disabled={busy || deleting}
+            onClick={() =>
+              void persist({
+                company,
+                assignedTo,
+                outcome,
+                done,
+                declined,
+                committed,
+                received,
+                receivedBy,
+              })
+            }
+          >
+            {busy ? "Saving…" : "Save"}
+          </Button>
+          <Button
+            type="button"
+            className="h-12 w-full text-base"
             variant={declined ? "outline" : "destructive"}
             disabled={busy || deleting}
             onClick={() => {
@@ -392,12 +397,12 @@ function LeadEditorForm({
           </Button>
           <Button
             type="button"
-            className="h-14 w-full text-base"
-            variant={done ? "outline" : "default"}
+            className="h-12 w-full text-base"
+            variant={done ? "outline" : "secondary"}
             disabled={busy || deleting}
             onClick={() => persist({ done: !done })}
           >
-            {done ? "Mark still open" : "Mark done"}
+            {done ? "Reopen" : "Mark completed"}
           </Button>
           {onDelete ? (
             confirmDelete ? (
