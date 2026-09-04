@@ -8,10 +8,10 @@ GitHub: [turja5252/artcell-edmonton](https://github.com/turja5252/artcell-edmont
 - **Calls** — claim a company, mark done, leave what happened, upload/download sponsor photos & PDFs
 - **Money** — target, pledged, received
 - **Seats** — tickets sold (with last-updated day), call list with first/last name, phone, email, team assignment, Call button, confirmed / tentative / declined + member count. Add people manually, from Android phone contacts (Chrome), or by importing a .vcf / .csv (iPhone & Android).
-- **Team** — add organizers
+- **Team** — roster + workload. Switch **Updating as → Admin** to add, edit, or remove teammates (Tanzim and everyone else are regular users).
 - **Songs** — setlist cues
 
-Anyone with the link can tap. No login.
+Anyone with the link can tap. No login. Roster edits require picking **Admin** under Updating as.
 
 ## Permanent hosting (Vercel)
 

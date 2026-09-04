@@ -40,7 +40,7 @@ import { formatMoney } from "@/lib/money";
 import { formatTime } from "@/lib/people";
 import type { Guest, GuestStatus, Lead, Member, Settings } from "@/lib/types";
 import { displayGuestName } from "@/lib/types";
-import { isTeamAdmin } from "@/lib/team-admin";
+import { ADMIN_DISPLAY_NAME, canonicalizePersonName, isTeamAdmin } from "@/lib/team-admin";
 import { cn } from "@/lib/utils";
 
 const ME_KEY = "artcell-edmonton-me";
@@ -123,6 +123,18 @@ export function ConcertApp({
     [members]
   );
 
+  useEffect(() => {
+    if (!hydrated || !me) return;
+    if (me === ADMIN_DISPLAY_NAME || isTeamAdmin(me)) return;
+    if (people.includes(me)) return;
+    const canonical = canonicalizePersonName(me, people);
+    if (canonical && people.includes(canonical)) {
+      writeMe(canonical);
+      return;
+    }
+    writeMe("");
+  }, [hydrated, me, people]);
+
   const load = useCallback(async () => {
     const response = await fetch("/api/board", { cache: "no-store" });
     const data = (await response.json()) as {
@@ -165,7 +177,9 @@ export function ConcertApp({
   }
 
   async function addMember(input: { name: string; phone?: string; email?: string }) {
-    if (!isTeamAdmin(me)) throw new Error("Only Tanzim can add teammates");
+    if (!isTeamAdmin(me)) {
+      throw new Error("Switch Updating as to Admin to manage teammates");
+    }
     const response = await fetch("/api/members", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -183,7 +197,9 @@ export function ConcertApp({
   }
 
   async function removeMember(id: string) {
-    if (!isTeamAdmin(me)) throw new Error("Only Tanzim can remove teammates");
+    if (!isTeamAdmin(me)) {
+      throw new Error("Switch Updating as to Admin to manage teammates");
+    }
     const removed = members.find((member) => member.id === id);
     const response = await fetch(`/api/members/${id}`, {
       method: "DELETE",
@@ -209,7 +225,9 @@ export function ConcertApp({
     id: string,
     input: { name: string; phone?: string; email?: string }
   ) {
-    if (!isTeamAdmin(me)) throw new Error("Only Tanzim can edit teammates");
+    if (!isTeamAdmin(me)) {
+      throw new Error("Switch Updating as to Admin to manage teammates");
+    }
     const previous = members.find((member) => member.id === id);
     const response = await fetch(`/api/members/${id}`, {
       method: "PATCH",

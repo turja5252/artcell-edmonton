@@ -45,21 +45,69 @@ async function streamToBuffer(stream: ReadableStream<Uint8Array> | null): Promis
   return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)));
 }
 
+async function parseJsonBuffer<T>(buffer: Buffer): Promise<T> {
+  return JSON.parse(buffer.toString("utf8")) as T;
+}
+
+async function readBlobJson<T>(pathname: string): Promise<T | undefined> {
+  const result = await get(pathname, { access: "public", useCache: false });
+  if (result?.stream) {
+    return parseJsonBuffer(await streamToBuffer(result.stream));
+  }
+
+  // get() can miss intermittently; fall back to listing the exact path.
+  const listed = await list({ prefix: pathname, limit: 10 });
+  const match = listed.blobs.find(
+    (blob) => blob.pathname === pathname || blob.pathname.endsWith(`/${pathname}`)
+  );
+  if (!match) return undefined;
+
+  const response = await fetch(match.url, { cache: "no-store" });
+  if (!response.ok) return undefined;
+  return (await response.json()) as T;
+}
+
+async function markSeeded(relativePath: string) {
+  const marker = `${PREFIX}/_seeded/${relativePath.replace(/^\/+/, "")}`;
+  await put(marker, "1", {
+    access: "public",
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    contentType: "text/plain",
+    cacheControlMaxAge: 0,
+  });
+}
+
+async function wasSeeded(relativePath: string): Promise<boolean> {
+  const marker = `${PREFIX}/_seeded/${relativePath.replace(/^\/+/, "")}`;
+  const result = await get(marker, { access: "public", useCache: false });
+  if (result?.stream) return true;
+  const listed = await list({ prefix: marker, limit: 5 });
+  return listed.blobs.some(
+    (blob) => blob.pathname === marker || blob.pathname.endsWith(`/${marker}`)
+  );
+}
+
 export async function readJsonFile<T>(relativePath: string, fallback: T): Promise<T> {
   if (useBlobStore()) {
     const pathname = `${PREFIX}/${relativePath.replace(/^\/+/, "")}`;
-    const result = await get(pathname, { access: "public", useCache: false });
-    if (!result?.stream) {
-      // Seed blob from local repo file on first deploy if present.
-      const local = await readLocalJson<T>(relativePath);
-      if (local !== undefined) {
-        await writeJsonFile(relativePath, local);
-        return local;
-      }
+    const existing = await readBlobJson<T>(pathname);
+    if (existing !== undefined) return existing;
+
+    // Already seeded once — never overwrite live data from the git checkout again.
+    // That was restoring deleted teammates (e.g. Novel) on every blob miss.
+    if (await wasSeeded(relativePath)) {
       return fallback;
     }
-    const text = (await streamToBuffer(result.stream)).toString("utf8");
-    return JSON.parse(text) as T;
+
+    const local = await readLocalJson<T>(relativePath);
+    if (local !== undefined) {
+      await writeJsonFile(relativePath, local);
+      await markSeeded(relativePath);
+      return local;
+    }
+    await markSeeded(relativePath);
+    return fallback;
   }
   const local = await readLocalJson<T>(relativePath);
   return local === undefined ? fallback : local;
@@ -85,6 +133,7 @@ export async function writeJsonFile(relativePath: string, value: unknown): Promi
       contentType: "application/json",
       cacheControlMaxAge: 0,
     });
+    await markSeeded(relativePath);
     return;
   }
   assertWritableStore("writeJsonFile");
@@ -127,8 +176,15 @@ export async function readBinaryFile(relativePath: string): Promise<Buffer> {
   if (useBlobStore()) {
     const pathname = `${PREFIX}/${relativePath.replace(/^\/+/, "")}`;
     const result = await get(pathname, { access: "public", useCache: false });
-    if (!result?.stream) throw new Error("File not found");
-    return streamToBuffer(result.stream);
+    if (result?.stream) return streamToBuffer(result.stream);
+    const listed = await list({ prefix: pathname, limit: 10 });
+    const match = listed.blobs.find(
+      (blob) => blob.pathname === pathname || blob.pathname.endsWith(`/${pathname}`)
+    );
+    if (!match) throw new Error("File not found");
+    const response = await fetch(match.url, { cache: "no-store" });
+    if (!response.ok) throw new Error("File not found");
+    return Buffer.from(await response.arrayBuffer());
   }
   return fs.readFile(path.join(process.cwd(), "data", relativePath));
 }

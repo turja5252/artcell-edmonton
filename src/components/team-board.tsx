@@ -94,8 +94,8 @@ export function TeamBoard({
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           {canManage
-            ? "Add organizers here. Tap Edit on anyone to change name, phone, or email."
-            : "Team roster. Only Tanzim can add or edit teammates — pick your name under “Updating as”."}
+            ? "You’re Admin. Add organizers or tap Edit on anyone to change name, phone, or email."
+            : "Team roster. Switch Updating as → Admin to add, edit, or remove teammates."}
         </p>
         {canManage ? (
           <Button
@@ -143,6 +143,8 @@ export function TeamBoard({
             {busy ? "Adding…" : "Add to the team"}
           </Button>
         </form>
+      ) : error ? (
+        <p className="text-sm text-destructive">{error}</p>
       ) : null}
 
       {openUnassigned.length > 0 && (
@@ -178,9 +180,10 @@ export function TeamBoard({
                   <div className="flex items-start justify-between gap-3">
                     <button
                       type="button"
-                      onClick={() =>
-                        canManage ? setEditing(row.member) : onFilterPerson(row.member.name)
-                      }
+                      onClick={() => {
+                        if (canManage) setEditing(row.member);
+                        else onFilterPerson(row.member.name);
+                      }}
                       className="min-w-0 flex-1 text-left"
                     >
                       <PersonChip name={row.member.name} />
@@ -233,7 +236,15 @@ export function TeamBoard({
                             size="icon"
                             className="size-10 text-muted-foreground"
                             aria-label={`Remove ${row.member.name}`}
-                            onClick={() => void onRemove(row.member.id)}
+                            onClick={() => {
+                              void onRemove(row.member.id).catch((err) => {
+                                setError(
+                                  err instanceof Error
+                                    ? err.message
+                                    : "Could not remove teammate"
+                                );
+                              });
+                            }}
                           >
                             <Trash2 className="size-4" />
                           </Button>

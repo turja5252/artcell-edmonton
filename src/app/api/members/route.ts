@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message : "Failed to add member";
     const status = message.includes("required")
       ? 400
-      : message.includes("Only Tanzim")
+      : message.includes("Only Admin") || message.includes("reserved")
         ? 403
         : 500;
     return NextResponse.json({ error: message }, { status });

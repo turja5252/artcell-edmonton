@@ -19,11 +19,11 @@ export async function PATCH(
     const message = error instanceof Error ? error.message : "Failed to update";
     const status = message.includes("not found")
       ? 404
-      : message.includes("already") || message.includes("Only Tanzim")
-        ? message.includes("Only Tanzim")
+      : message.includes("already")
+        ? 400
+        : message.includes("Only Admin") || message.includes("reserved")
           ? 403
-          : 400
-        : 500;
+          : 500;
     return NextResponse.json({ error: message }, { status });
   }
 }
@@ -47,7 +47,7 @@ export async function DELETE(
     const message = error instanceof Error ? error.message : "Failed to remove";
     const status = message.includes("not found")
       ? 404
-      : message.includes("Only Tanzim")
+      : message.includes("Only Admin")
         ? 403
         : 500;
     return NextResponse.json({ error: message }, { status });

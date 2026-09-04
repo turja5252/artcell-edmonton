@@ -32,7 +32,7 @@
   {
     "id": "millet-pharmacy",
     "company": "Millet Pharmacy",
-    "assignedTo": "Novel",
+    "assignedTo": "Khaled Bari",
     "done": false,
     "outcome": "",
     "committed": 0,
@@ -110,7 +110,7 @@
   {
     "id": "razib-chowdhury",
     "company": "Razib Chowdhury",
-    "assignedTo": "Khaled",
+    "assignedTo": "Khaled Bari",
     "done": false,
     "outcome": "",
     "committed": 0,
@@ -227,7 +227,7 @@
   {
     "id": "canadian-butcher",
     "company": "Canadian Butcher",
-    "assignedTo": "Khaled",
+    "assignedTo": "Khaled Bari",
     "done": false,
     "outcome": "Waiting for reply",
     "committed": 0,

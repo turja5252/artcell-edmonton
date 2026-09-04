@@ -20,7 +20,7 @@ import {
   writeAttachmentFile,
 } from "@/lib/attachments";
 import { readJsonFile, writeJsonFile } from "@/lib/persist";
-import { isTeamAdmin } from "@/lib/team-admin";
+import { assertTeamAdminActor, resolveAssignee } from "@/lib/team-admin";
 
 const LEADS_FILE = "leads.json";
 const GUESTS_FILE = "guests.json";
@@ -204,19 +204,50 @@ export function getBoard(): Promise<{
   settings: Settings;
 }> {
   return enqueue(async () => {
-    const members = await readMembersFile();
-    const allowed = new Set(members.map((member) => member.name));
-    const leadsRaw = await readLeadsFile();
-    const guestsRaw = await readGuestsFile();
-    const leads = clearMissingLeadAssignees(leadsRaw, allowed);
-    const guests = clearMissingGuestAssignees(guestsRaw, allowed);
-    if (
-      leads.some((lead, index) => lead !== leadsRaw[index]) ||
-      guests.some((guest, index) => guest !== guestsRaw[index])
-    ) {
-      await writeLeadsFile(leads);
-      await writeGuestsFile(guests);
+    let members = await readMembersFile();
+    const withoutDupes = members.filter(
+      (member) =>
+        member.id !== "novel" && member.name.trim().toLowerCase() !== "novel"
+    );
+    if (withoutDupes.length !== members.length) {
+      await writeMembersFile(withoutDupes);
+      members = withoutDupes;
     }
+
+    const allowedNames = members.map((member) => member.name);
+    const allowed = new Set(allowedNames);
+    const leadsOriginal = await readLeadsFile();
+    const guestsOriginal = await readGuestsFile();
+    const leads = clearMissingLeadAssignees(
+      leadsOriginal.map((lead) => ({
+        ...lead,
+        assignedTo: resolveAssignee(lead.assignedTo, allowedNames),
+        receivedBy: resolveAssignee(lead.receivedBy, allowedNames),
+        updatedBy: resolveAssignee(lead.updatedBy, allowedNames) ?? lead.updatedBy,
+      })),
+      allowed
+    );
+    const guests = clearMissingGuestAssignees(
+      guestsOriginal.map((guest) => ({
+        ...guest,
+        assignedTo: resolveAssignee(guest.assignedTo, allowedNames),
+        updatedBy: resolveAssignee(guest.updatedBy, allowedNames) ?? guest.updatedBy,
+      })),
+      allowed
+    );
+    const leadsDirty = leads.some(
+      (lead, index) =>
+        lead.assignedTo !== leadsOriginal[index]?.assignedTo ||
+        lead.receivedBy !== leadsOriginal[index]?.receivedBy ||
+        lead.updatedBy !== leadsOriginal[index]?.updatedBy
+    );
+    const guestsDirty = guests.some(
+      (guest, index) =>
+        guest.assignedTo !== guestsOriginal[index]?.assignedTo ||
+        guest.updatedBy !== guestsOriginal[index]?.updatedBy
+    );
+    if (leadsDirty) await writeLeadsFile(leads);
+    if (guestsDirty) await writeGuestsFile(guests);
     return {
       leads,
       guests,
@@ -234,6 +265,8 @@ export function createLead(input: {
   return enqueue(async () => {
     const company = input.company.trim();
     if (!company) throw new Error("Company name is required");
+    const members = await readMembersFile();
+    const allowedNames = members.map((member) => member.name);
     const leads = await readLeadsFile();
     const lead = stamp(
       normalizeLead({
@@ -242,7 +275,7 @@ export function createLead(input: {
           leads.map((item) => item.id)
         ),
         company,
-        assignedTo: input.assignedTo?.trim() || null,
+        assignedTo: resolveAssignee(input.assignedTo, allowedNames),
         done: false,
         outcome: "",
         committed: 0,
@@ -266,6 +299,8 @@ export function patchLead(id: string, patch: LeadPatch): Promise<Lead> {
     const index = leads.findIndex((lead) => lead.id === id);
     if (index === -1) throw new Error("Lead not found");
     const current = leads[index];
+    const members = await readMembersFile();
+    const allowedNames = members.map((member) => member.name);
     const received =
       patch.received === undefined ? current.received : parseMoney(patch.received);
     let receivedBy =
@@ -278,14 +313,15 @@ export function patchLead(id: string, patch: LeadPatch): Promise<Lead> {
     if (received === 0 && patch.received !== undefined) {
       receivedBy = patch.receivedBy === undefined ? null : receivedBy;
     }
+    receivedBy = resolveAssignee(receivedBy, allowedNames);
     const next = stamp(
       normalizeLead({
         ...current,
         company: patch.company?.trim() || current.company,
         assignedTo:
           patch.assignedTo === undefined
-            ? current.assignedTo
-            : patch.assignedTo?.trim() || null,
+            ? resolveAssignee(current.assignedTo, allowedNames)
+            : resolveAssignee(patch.assignedTo, allowedNames),
         done: patch.done ?? current.done,
         outcome: patch.outcome === undefined ? current.outcome : patch.outcome,
         committed:
@@ -449,7 +485,12 @@ export function createGuest(input: {
 }): Promise<Guest> {
   return enqueue(async () => {
     const guests = await readGuestsFile();
-    const guest = buildGuest(input, guests);
+    const members = await readMembersFile();
+    const allowedNames = members.map((member) => member.name);
+    const guest = buildGuest(
+      { ...input, assignedTo: resolveAssignee(input.assignedTo, allowedNames) },
+      guests
+    );
     guests.push(guest);
     await writeGuestsFile(guests);
     return guest;
@@ -471,6 +512,8 @@ export function createGuests(
   return enqueue(async () => {
     if (!inputs.length) throw new Error("No contacts to add");
     const guests = await readGuestsFile();
+    const members = await readMembersFile();
+    const allowedNames = members.map((member) => member.name);
     const existingKeys = new Set(
       guests.map(
         (guest) =>
@@ -494,7 +537,15 @@ export function createGuests(
         continue;
       }
       const guest = buildGuest(
-        { ...input, firstName, lastName, name, phone, actor },
+        {
+          ...input,
+          firstName,
+          lastName,
+          name,
+          phone,
+          assignedTo: resolveAssignee(input.assignedTo, allowedNames),
+          actor,
+        },
         [...guests, ...created]
       );
       created.push(guest);
@@ -555,6 +606,8 @@ export function patchGuest(id: string, patch: GuestPatch): Promise<Guest> {
     const index = guests.findIndex((guest) => guest.id === id);
     if (index === -1) throw new Error("Guest not found");
     const current = guests[index];
+    const members = await readMembersFile();
+    const allowedNames = members.map((member) => member.name);
     const firstName =
       patch.firstName === undefined ? current.firstName : patch.firstName.trim();
     const lastName =
@@ -570,8 +623,8 @@ export function patchGuest(id: string, patch: GuestPatch): Promise<Guest> {
         email: patch.email === undefined ? current.email : patch.email,
         assignedTo:
           patch.assignedTo === undefined
-            ? current.assignedTo
-            : patch.assignedTo?.trim() || null,
+            ? resolveAssignee(current.assignedTo, allowedNames)
+            : resolveAssignee(patch.assignedTo, allowedNames),
         status: patch.status ?? current.status,
         partySize: patch.partySize === undefined ? current.partySize : patch.partySize,
         ticketBought:
@@ -630,11 +683,12 @@ export function createMember(input: {
   actor?: string | null;
 }): Promise<Member> {
   return enqueue(async () => {
-    if (!isTeamAdmin(input.actor)) {
-      throw new Error("Only Tanzim can add teammates");
-    }
+    assertTeamAdminActor(input.actor);
     const name = input.name.trim();
     if (!name) throw new Error("Name is required");
+    if (name.toLowerCase() === "admin") {
+      throw new Error("Admin is reserved — pick it under Updating as");
+    }
     const members = await readMembersFile();
     const existing = members.find(
       (member) => member.name.toLowerCase() === name.toLowerCase()
@@ -657,14 +711,15 @@ export function createMember(input: {
 
 export function patchMember(id: string, patch: MemberPatch): Promise<Member> {
   return enqueue(async () => {
-    if (!isTeamAdmin(patch.actor)) {
-      throw new Error("Only Tanzim can edit teammates");
-    }
+    assertTeamAdminActor(patch.actor);
     const members = await readMembersFile();
     const index = members.findIndex((member) => member.id === id);
     if (index === -1) throw new Error("Member not found");
     const current = members[index];
     const nextName = patch.name?.trim() || current.name;
+    if (nextName.toLowerCase() === "admin") {
+      throw new Error("Admin is reserved — pick it under Updating as");
+    }
     if (
       members.some(
         (member) =>
@@ -743,9 +798,7 @@ export function deleteMember(
   guests: Guest[];
 }> {
   return enqueue(async () => {
-    if (!isTeamAdmin(actor)) {
-      throw new Error("Only Tanzim can remove teammates");
-    }
+    assertTeamAdminActor(actor);
     const members = await readMembersFile();
     const target = members.find((member) => member.id === id);
     if (!target) throw new Error("Member not found");
