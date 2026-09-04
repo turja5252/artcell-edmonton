@@ -216,6 +216,7 @@ export function ConcertApp({
 
   function setWhoOpen(open: boolean) {
     if (open) {
+      setWhoSkipped(false);
       setWhoForced(true);
       return;
     }
@@ -416,7 +417,7 @@ export function ConcertApp({
   ];
 
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col px-4 pb-28 pt-5 sm:px-6">
+    <div className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col px-4 pb-32 pt-5 sm:px-6">
       <header className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[11px] font-medium tracking-[0.22em] text-primary uppercase">
@@ -426,7 +427,7 @@ export function ConcertApp({
             Artcell
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Calls, money, seats — tap to update, or download Excel for 365.
+            Calls, money, seats — tap to update from your phone.
           </p>
         </div>
         <div className="flex gap-2">
@@ -467,7 +468,7 @@ export function ConcertApp({
       <button
         type="button"
         onClick={() => setWhoOpen(true)}
-        className="mt-4 flex items-center justify-between rounded-2xl border border-border/80 bg-card/70 px-3 py-3 text-left"
+        className="relative z-10 mt-4 flex w-full items-center justify-between gap-3 rounded-2xl border border-border/80 bg-card/70 px-3 py-3 text-left active:bg-card"
       >
         <span className="text-sm text-muted-foreground">Updating as</span>
         {me ? (
@@ -626,10 +627,10 @@ export function ConcertApp({
         </section>
       )}
 
-      {tab === "seats" || tab === "outreach" || tab === "money" ? (
+      {tab === "outreach" || tab === "seats" ? (
         <Button
           type="button"
-          className="fixed right-4 bottom-24 z-30 size-14 rounded-full shadow-lg sm:right-[max(1rem,calc(50%-22rem))]"
+          className="fixed bottom-28 left-4 z-30 size-14 rounded-full shadow-lg sm:left-auto sm:right-[max(1rem,calc(50%-22rem))]"
           onClick={() => (tab === "seats" ? setAddGuestOpen(true) : setAddOpen(true))}
           aria-label={tab === "seats" ? "Add someone to invite" : "Add a company"}
         >
@@ -637,7 +638,7 @@ export function ConcertApp({
         </Button>
       ) : null}
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border/80 bg-background/85 px-2 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md">
+      <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-border/80 bg-background/95 px-2 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md">
         <div className="mx-auto grid max-w-3xl grid-cols-5 gap-0.5">
           <NavButton
             active={tab === "outreach"}
@@ -773,7 +774,7 @@ function NavButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex h-14 flex-col items-center justify-center gap-0.5 rounded-xl text-xs font-medium",
+        "relative z-50 flex h-14 flex-col items-center justify-center gap-0.5 rounded-xl text-xs font-medium touch-manipulation",
         active ? "bg-primary/15 text-primary" : "text-muted-foreground"
       )}
     >
