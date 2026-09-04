@@ -1160,7 +1160,7 @@ function LeadCard({
           onClick={onToggleDone}
         >
           <Check className="size-4" />
-          {lead.done ? "Reopen" : "Mark completed"}
+          {lead.done ? "Undo" : "Mark done"}
         </Button>
       </div>
     </article>
@@ -1204,9 +1204,9 @@ function EmptyState({
   if (filter === "done") {
     return (
       <div className="mt-8 rounded-2xl border border-dashed border-border p-6 text-center">
-        <p className="font-medium">No one marked completed yet</p>
+        <p className="font-medium">No one marked done yet</p>
         <p className="mt-1 text-sm text-muted-foreground">
-          After you call, tap Mark completed when there is nothing left to do.
+          After you call, tap Mark done and leave what they said.
         </p>
       </div>
     );
