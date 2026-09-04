@@ -37,6 +37,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# live write clock — generated, not seed data
+/data/_meta.json
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

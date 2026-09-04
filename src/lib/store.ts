@@ -19,7 +19,8 @@ import {
   safeDownloadName,
   writeAttachmentFile,
 } from "@/lib/attachments";
-import { readJsonFile, writeJsonFile } from "@/lib/persist";
+import { readBoardWriteMeta, readJsonFile, writeJsonFile } from "@/lib/persist";
+import type { BoardSnapshot } from "@/lib/types";
 import {
   assertTeamAdminActor,
   canonicalizeMembers,
@@ -30,6 +31,7 @@ import {
   rewriteStoredPersonName,
   samePerson,
 } from "@/lib/team-admin";
+import { snapshotStamp } from "@/lib/board-sync";
 
 const LEADS_FILE = "leads.json";
 const GUESTS_FILE = "guests.json";
@@ -88,7 +90,11 @@ function normalizeLead(lead: Partial<Lead> & { company: string; id: string }): L
     company: lead.company,
     assignedTo: rewriteStoredPersonName(lead.assignedTo) || lead.assignedTo?.trim() || null,
     done: Boolean(lead.done),
-    declined: resolveLeadDeclined({ declined: lead.declined, outcome }),
+    declined: resolveLeadDeclined({
+      declined: lead.declined,
+      outcome,
+      notes: "notes" in lead ? String((lead as { notes?: unknown }).notes ?? "") : "",
+    }),
     outcome,
     committed: parseMoney(lead.committed),
     received: parseMoney(lead.received),
@@ -167,12 +173,6 @@ function normalizeMember(member: Partial<Member> & { name: string; id: string })
   };
 }
 
-function membersSignature(members: Member[]): string {
-  return members
-    .map((member) => `${member.id}\t${member.name}\t${member.phone}\t${member.email}`)
-    .join("\n");
-}
-
 async function readMembersFile(): Promise<Member[]> {
   const parsed = await readJsonFile<Member[]>(MEMBERS_FILE, []);
   return canonicalizeMembers(parsed.map((member) => normalizeMember(member)));
@@ -216,63 +216,49 @@ export function getSettings(): Promise<Settings> {
   return enqueue(readSettingsFile);
 }
 
-export function getBoard(): Promise<{
-  leads: Lead[];
-  guests: Guest[];
-  members: Member[];
-  settings: Settings;
-}> {
+export function getBoard(): Promise<BoardSnapshot> {
   return enqueue(async () => {
     const membersRaw = await readJsonFile<Member[]>(MEMBERS_FILE, []);
     const membersNormalized = membersRaw.map((member) => normalizeMember(member));
     const members = canonicalizeMembers(membersNormalized);
-    // Persist Novel→Khaled fold only when the roster rows actually changed.
-    if (members.length > 0 && membersSignature(members) !== membersSignature(membersNormalized)) {
-      await writeMembersFile(members);
-    }
-
     const leadsOriginal = await readLeadsFile();
     const guestsOriginal = await readGuestsFile();
+    const settings = await readSettingsFile();
+    const meta = await readBoardWriteMeta();
 
-    // Empty roster is a blob miss / fallback — never "clear everyone" and write that back.
-    if (members.length === 0) {
-      return {
-        leads: leadsOriginal,
-        guests: guestsOriginal,
-        members,
-        settings: await readSettingsFile(),
-      };
-    }
-
+    // Empty roster is a blob miss / fallback — never "clear everyone".
     const allowedNames = members.map((member) => member.name);
-    const leads = leadsOriginal.map((lead) => ({
-      ...lead,
-      assignedTo: canonicalizeStoredAssignee(lead.assignedTo, allowedNames),
-      receivedBy: canonicalizeStoredAssignee(lead.receivedBy, allowedNames),
-      updatedBy: resolveActorName(lead.updatedBy, allowedNames) ?? lead.updatedBy,
-    }));
-    const guests = guestsOriginal.map((guest) => ({
-      ...guest,
-      assignedTo: canonicalizeStoredAssignee(guest.assignedTo, allowedNames),
-      updatedBy: resolveActorName(guest.updatedBy, allowedNames) ?? guest.updatedBy,
-    }));
+    const leads =
+      members.length === 0
+        ? leadsOriginal
+        : leadsOriginal.map((lead) => ({
+            ...lead,
+            assignedTo: canonicalizeStoredAssignee(lead.assignedTo, allowedNames),
+            receivedBy: canonicalizeStoredAssignee(lead.receivedBy, allowedNames),
+            updatedBy: resolveActorName(lead.updatedBy, allowedNames) ?? lead.updatedBy,
+          }));
+    const guests =
+      members.length === 0
+        ? guestsOriginal
+        : guestsOriginal.map((guest) => ({
+            ...guest,
+            assignedTo: canonicalizeStoredAssignee(guest.assignedTo, allowedNames),
+            updatedBy: resolveActorName(guest.updatedBy, allowedNames) ?? guest.updatedBy,
+          }));
 
-    const leadsDirty = leads.some(
-      (lead, index) =>
-        lead.assignedTo !== leadsOriginal[index]?.assignedTo ||
-        lead.receivedBy !== leadsOriginal[index]?.receivedBy
-    );
-    const guestsDirty = guests.some(
-      (guest, index) => guest.assignedTo !== guestsOriginal[index]?.assignedTo
-    );
-    if (leadsDirty) await writeLeadsFile(leads);
-    if (guestsDirty) await writeGuestsFile(guests);
-    return {
-      leads,
-      guests,
-      members,
-      settings: await readSettingsFile(),
-    };
+    // Read-only: never persist folds or assignee rewrites from GET / SSR.
+    // A stale blob read + write was overwriting newer PATCH results.
+    const computed = snapshotStamp({ leads, guests, settings });
+    const metaStamp = meta?.writtenAt ?? null;
+    const metaAt = metaStamp ? Date.parse(metaStamp) : 0;
+    const writtenAt =
+      Number.isFinite(metaAt) && metaAt >= computed
+        ? metaStamp
+        : computed > 0
+          ? new Date(computed).toISOString()
+          : metaStamp;
+
+    return { leads, guests, members, settings, writtenAt };
   });
 }
 
@@ -343,11 +329,14 @@ export function patchLead(id: string, patch: LeadPatch): Promise<Lead> {
     }
     const outcome = patch.outcome === undefined ? current.outcome : patch.outcome;
     const declined =
-      patch.declined !== undefined
-        ? Boolean(patch.declined)
-        : patch.outcome !== undefined
-          ? resolveLeadDeclined({ outcome })
-          : current.declined;
+      patch.declined === true
+        ? true
+        : patch.declined === false
+          ? false
+          : resolveLeadDeclined({
+              declined: current.declined,
+              outcome,
+            });
     const next = stamp(
       normalizeLead({
         ...current,

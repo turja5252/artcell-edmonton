@@ -123,6 +123,7 @@ export function MoneyBoard({ leads, members, target, onSetTarget, onOpenLead }: 
                 onClick={() => onOpenLead(lead)}
                 className={cn(
                   "flex w-full items-center justify-between gap-3 rounded-2xl border border-border/80 bg-card/80 p-3 text-left",
+                  // Glow every declined company, including $0 “Add $” rows.
                   declined && DECLINED_GLOW_CLASS
                 )}
               >

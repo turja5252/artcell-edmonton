@@ -38,7 +38,14 @@ import { TeamBoard } from "@/components/team-board";
 import { WhoAmI } from "@/components/who-am-i";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { mergeGuests, mergeLeads, mergeMembers, mergeSettings } from "@/lib/board-sync";
+import {
+  mergeGuests,
+  mergeLeads,
+  mergeMembers,
+  mergeSettings,
+  parseUpdatedAt,
+  snapshotStamp,
+} from "@/lib/board-sync";
 import { formatMoney } from "@/lib/money";
 import { formatTime } from "@/lib/people";
 import type { Guest, GuestStatus, Lead, Member, Settings } from "@/lib/types";
@@ -131,6 +138,9 @@ export function ConcertApp({
   const [ticketsOpen, setTicketsOpen] = useState(false);
   const savingCount = useRef(0);
   const lastSaveAt = useRef(0);
+  const lastWriteAt = useRef(0);
+  const lastWriteStamp = useRef(0);
+  const lastWriteById = useRef(new Map<string, number>());
   const busyIdRef = useRef<string | null>(null);
   const memberSaving = useRef(false);
   const settingsSaving = useRef(false);
@@ -168,13 +178,69 @@ export function ConcertApp({
     lastSaveAt.current = Date.now();
   }
 
+  function noteSuccessfulWrite(id?: string | null, stamp?: string | null) {
+    const now = Date.now();
+    lastWriteAt.current = now;
+    lastSaveAt.current = now;
+    const writeMs = parseUpdatedAt(stamp) || now;
+    lastWriteStamp.current = Math.max(lastWriteStamp.current, writeMs);
+    if (id) lastWriteById.current.set(id, writeMs);
+  }
+
+  function applyRemoteBoard(
+    data: {
+      leads?: Lead[];
+      guests?: Guest[];
+      members?: Member[];
+      settings?: Settings;
+    },
+    mode: "poll" | "replace"
+  ) {
+    if (mode === "replace") {
+      if (data.leads) setLeads(data.leads);
+      if (data.guests) setGuests(data.guests);
+      if (data.members) setMembers(data.members);
+      if (data.settings) setSettings(data.settings);
+      return;
+    }
+    if (data.leads) {
+      setLeads((current) =>
+        mergeLeads(
+          current,
+          data.leads!,
+          deletedIds.current.leads,
+          busyIdRef.current,
+          lastWriteById.current
+        )
+      );
+    }
+    if (data.guests) {
+      setGuests((current) =>
+        mergeGuests(
+          current,
+          data.guests!,
+          deletedIds.current.guests,
+          busyIdRef.current,
+          lastWriteById.current
+        )
+      );
+    }
+    if (data.members) {
+      setMembers((current) => mergeMembers(current, data.members!, deletedIds.current.members));
+    }
+    if (data.settings) {
+      setSettings((current) => mergeSettings(current, data.settings!));
+    }
+  }
+
   function saveInFlight() {
     return (
       savingCount.current > 0 ||
       busyIdRef.current != null ||
       memberSaving.current ||
       settingsSaving.current ||
-      Date.now() - lastSaveAt.current < SAVE_POLL_DEBOUNCE_MS
+      Date.now() - Math.max(lastSaveAt.current, lastWriteAt.current) <
+        SAVE_POLL_DEBOUNCE_MS
     );
   }
 
@@ -186,33 +252,20 @@ export function ConcertApp({
       guests?: Guest[];
       members?: Member[];
       settings?: Settings;
+      writtenAt?: string | null;
       error?: string;
     };
     if (!response.ok) throw new Error(data.error || "Could not load the board");
-    if (mode === "poll") {
-      if (saveInFlight()) return;
-      if (data.leads) {
-        setLeads((current) =>
-          mergeLeads(current, data.leads!, deletedIds.current.leads, busyIdRef.current)
-        );
-      }
-      if (data.guests) {
-        setGuests((current) =>
-          mergeGuests(current, data.guests!, deletedIds.current.guests, busyIdRef.current)
-        );
-      }
-      if (data.members) {
-        setMembers((current) => mergeMembers(current, data.members!, deletedIds.current.members));
-      }
-      if (data.settings) {
-        setSettings((current) => mergeSettings(current, data.settings!));
-      }
+    if (mode === "poll" && saveInFlight()) return;
+    const remoteStamp = snapshotStamp(data);
+    if (
+      lastWriteStamp.current > 0 &&
+      remoteStamp > 0 &&
+      remoteStamp < lastWriteStamp.current
+    ) {
       return;
     }
-    if (data.leads) setLeads(data.leads);
-    if (data.guests) setGuests(data.guests);
-    if (data.members) setMembers(data.members);
-    if (data.settings) setSettings(data.settings);
+    applyRemoteBoard(data, mode === "poll" ? "poll" : "replace");
   }, []);
 
   useEffect(() => {
@@ -259,6 +312,7 @@ export function ConcertApp({
       const data = (await response.json()) as { member?: Member; error?: string };
       if (!response.ok) throw new Error(data.error || "Could not add member");
       if (data.member) {
+        noteSuccessfulWrite(data.member.id);
         setMembers((current) => {
           if (current.some((member) => member.id === data.member!.id)) return current;
           return [...current, data.member!].sort((a, b) => a.name.localeCompare(b.name));
@@ -295,6 +349,7 @@ export function ConcertApp({
         deletedIds.current.members.delete(id);
         throw new Error(data.error || "Could not remove member");
       }
+      noteSuccessfulWrite(id);
       if (data.members) setMembers(data.members);
       else setMembers((current) => current.filter((member) => member.id !== id));
       if (data.leads) setLeads(data.leads);
@@ -329,6 +384,7 @@ export function ConcertApp({
       const data = (await response.json()) as { member?: Member; error?: string };
       if (!response.ok) throw new Error(data.error || "Could not save member");
       if (data.member) {
+        noteSuccessfulWrite(data.member.id);
         setMembers((current) =>
           current
             .map((member) => (member.id === id ? data.member! : member))
@@ -414,6 +470,7 @@ export function ConcertApp({
       const data = (await response.json()) as { lead?: Lead; error?: string };
       if (!response.ok) throw new Error(data.error || "Update failed");
       if (data.lead) {
+        noteSuccessfulWrite(id, data.lead.updatedAt);
         setLeads((current) =>
           current.map((lead) => (lead.id === id ? data.lead! : lead))
         );
@@ -439,6 +496,7 @@ export function ConcertApp({
       const response = await fetch(`/api/leads/${id}`, { method: "DELETE" });
       const data = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(data.error || "Could not delete");
+      noteSuccessfulWrite(id);
       setToast(removed ? `Removed ${removed.company}` : "Entry deleted");
     } catch (err) {
       deletedIds.current.leads.delete(id);
@@ -459,7 +517,10 @@ export function ConcertApp({
       });
       const data = (await response.json()) as { lead?: Lead; error?: string };
       if (!response.ok) throw new Error(data.error || "Could not add");
-      if (data.lead) setLeads((current) => [...current, data.lead!]);
+      if (data.lead) {
+        noteSuccessfulWrite(data.lead.id, data.lead.updatedAt);
+        setLeads((current) => [...current, data.lead!]);
+      }
       setToast(`${company} is on the board`);
     } finally {
       markSaveEnd();
@@ -503,6 +564,7 @@ export function ConcertApp({
       const data = (await response.json()) as { guest?: Guest; error?: string };
       if (!response.ok) throw new Error(data.error || "Update failed");
       if (data.guest) {
+        noteSuccessfulWrite(id, data.guest.updatedAt);
         setGuests((current) =>
           current.map((guest) => (guest.id === id ? data.guest! : guest))
         );
@@ -528,7 +590,10 @@ export function ConcertApp({
       });
       const data = (await response.json()) as { guest?: Guest; error?: string };
       if (!response.ok) throw new Error(data.error || "Could not add");
-      if (data.guest) setGuests((current) => [...current, data.guest!]);
+      if (data.guest) {
+        noteSuccessfulWrite(data.guest.id, data.guest.updatedAt);
+        setGuests((current) => [...current, data.guest!]);
+      }
       setToast(`${displayGuestName(data.guest ?? input)} is on the call list`);
     } finally {
       markSaveEnd();
@@ -551,6 +616,9 @@ export function ConcertApp({
       };
       if (!response.ok) throw new Error(data.error || "Could not add contacts");
       if (data.guests?.length) {
+        for (const guest of data.guests) {
+          noteSuccessfulWrite(guest.id, guest.updatedAt);
+        }
         setGuests((current) => [...current, ...data.guests!]);
       }
       const added = data.added ?? data.guests?.length ?? 0;
@@ -583,7 +651,10 @@ export function ConcertApp({
       });
       const data = (await response.json()) as { settings?: Settings; error?: string };
       if (!response.ok) throw new Error(data.error || "Could not save target");
-      if (data.settings) setSettings(data.settings);
+      if (data.settings) {
+        noteSuccessfulWrite("settings", data.settings.ticketsSoldUpdatedAt);
+        setSettings(data.settings);
+      }
       setToast(
         patch.ticketsSold !== undefined ? "Ticket count saved" : "Target saved"
       );
@@ -608,7 +679,10 @@ export function ConcertApp({
         error?: string;
       };
       if (!response.ok) throw new Error(data.error || "Sync failed");
-      if (data.leads) setLeads(data.leads);
+      if (data.leads) {
+        noteSuccessfulWrite("sheet-sync", new Date().toISOString());
+        setLeads(data.leads);
+      }
       setToast(
         data.added ? `Added ${data.added} new name${data.added === 1 ? "" : "s"} from the sheet` : "Sheet is already in sync"
       );
@@ -979,6 +1053,7 @@ export function ConcertApp({
         }}
         onSave={saveLead}
         onLeadChange={(lead) => {
+          noteSuccessfulWrite(lead.id, lead.updatedAt);
           setLeads((current) =>
             current.map((item) => (item.id === lead.id ? lead : item))
           );

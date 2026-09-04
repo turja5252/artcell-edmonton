@@ -104,6 +104,14 @@ export type Settings = {
   ticketsSoldUpdatedBy: string | null;
 };
 
+export type BoardSnapshot = {
+  leads: Lead[];
+  guests: Guest[];
+  members: Member[];
+  settings: Settings;
+  writtenAt: string | null;
+};
+
 export type SetlistCue = {
   id: string;
   label: string;
@@ -123,10 +131,10 @@ export const OUTCOME_CHIPS = [
 
 /** Ring + red glow for declined sponsor cards (Calls + Money). Not a full red fill. */
 export const DECLINED_GLOW_CLASS =
-  "ring-2 ring-destructive/80 shadow-[0_0_18px_2px_rgba(239,68,68,0.42)]";
+  "ring-2 ring-destructive shadow-[0_0_18px_2px_rgba(239,68,68,0.42)]";
 
 const DECLINED_OUTCOME_RE =
-  /declined|said\s+no|not\s+interested|\bpass\b|\bnope\b|\bno thanks\b/i;
+  /declined|said\s+no|not\s+interested|won['’]?t\s+sponsor|not\s+sponsoring|turned\s+down|\brejected\b|\bpass\b|\bnope\b|\bno thanks\b/i;
 
 export function isDeclinedOutcome(outcome: string | null | undefined): boolean {
   const text = (outcome ?? "").trim();
@@ -134,20 +142,26 @@ export function isDeclinedOutcome(outcome: string | null | undefined): boolean {
   return DECLINED_OUTCOME_RE.test(text);
 }
 
-/** Explicit `declined` wins; missing field is inferred from outcome text (legacy rows). */
+/**
+ * Persist and display the same rule: explicit `declined: true` always wins,
+ * and declined language in outcome/notes still counts even when the flag is
+ * missing or stored as false (legacy rows).
+ */
 export function resolveLeadDeclined(lead: {
   declined?: boolean | null;
   outcome?: string | null;
+  notes?: string | null;
 }): boolean {
-  if (typeof lead.declined === "boolean") return lead.declined;
-  return isDeclinedOutcome(lead.outcome);
+  if (lead.declined === true) return true;
+  return isDeclinedOutcome(lead.outcome) || isDeclinedOutcome(lead.notes);
 }
 
 export function isLeadDeclined(lead: {
   declined?: boolean | null;
   outcome?: string | null;
+  notes?: string | null;
 }): boolean {
-  return lead.declined === true || isDeclinedOutcome(lead.outcome);
+  return resolveLeadDeclined(lead);
 }
 
 export const GUEST_STATUSES: { id: GuestStatus; label: string }[] = [

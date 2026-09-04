@@ -1,5 +1,4 @@
-import { NextResponse } from "next/server";
-
+import { jsonNoStore } from "@/lib/http";
 import { deleteLead, patchLead } from "@/lib/store";
 import type { LeadPatch } from "@/lib/types";
 
@@ -14,11 +13,11 @@ export async function PATCH(
     const { id } = await context.params;
     const body = (await request.json()) as LeadPatch;
     const lead = await patchLead(id, body);
-    return NextResponse.json({ lead });
+    return jsonNoStore({ lead });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to update";
     const status = message.includes("not found") ? 404 : 500;
-    return NextResponse.json({ error: message }, { status });
+    return jsonNoStore({ error: message }, { status });
   }
 }
 
@@ -29,10 +28,10 @@ export async function DELETE(
   try {
     const { id } = await context.params;
     await deleteLead(id);
-    return NextResponse.json({ ok: true });
+    return jsonNoStore({ ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to delete";
     const status = message.includes("not found") ? 404 : 500;
-    return NextResponse.json({ error: message }, { status });
+    return jsonNoStore({ error: message }, { status });
   }
 }

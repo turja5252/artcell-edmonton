@@ -8,8 +8,45 @@ const PREFIX = "artcell";
 /** Live board files. After first seed, never rewrite these from git `data/*.json`. */
 const LIVE_JSON = new Set(["leads.json", "guests.json", "members.json", "settings.json"]);
 
-const memoryValues = new Map<string, unknown>();
+type CacheEntry = {
+  value: unknown;
+  freshness: number;
+  writeAt: number;
+};
+
+const memoryValues = new Map<string, CacheEntry>();
 const seededMemory = new Set<string>();
+const META_FILE = "_meta.json";
+
+export type BoardWriteMeta = {
+  writtenAt: string;
+};
+
+export function jsonFreshness(value: unknown): number {
+  if (Array.isArray(value)) {
+    let max = 0;
+    for (const item of value) {
+      if (!item || typeof item !== "object") continue;
+      const stamp = (item as { updatedAt?: unknown }).updatedAt;
+      if (typeof stamp === "string") {
+        const time = Date.parse(stamp);
+        if (Number.isFinite(time)) max = Math.max(max, time);
+      }
+    }
+    return max;
+  }
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    for (const key of ["writtenAt", "ticketsSoldUpdatedAt", "updatedAt"]) {
+      const stamp = record[key];
+      if (typeof stamp === "string") {
+        const time = Date.parse(stamp);
+        if (Number.isFinite(time)) return time;
+      }
+    }
+  }
+  return 0;
+}
 
 export function useBlobStore(): boolean {
   return Boolean(
@@ -43,16 +80,30 @@ function fileKey(relativePath: string): string {
   return relativePath.replace(/^\/+/, "");
 }
 
-function remember<T>(relativePath: string, value: T) {
+function remember<T>(relativePath: string, value: T, source: "read" | "write" = "read") {
   const key = fileKey(relativePath);
-  memoryValues.set(key, value);
+  const freshness = jsonFreshness(value);
+  const existing = memoryValues.get(key);
+  if (source === "read" && existing) {
+    // Never replace a successful write with an older blob / last-known snapshot.
+    if (existing.writeAt > 0 && freshness < existing.writeAt) return;
+    if (freshness < existing.freshness) return;
+  }
+  const writeAt = source === "write" ? Date.now() : existing?.writeAt ?? 0;
+  memoryValues.set(key, {
+    value,
+    freshness: source === "write" ? Math.max(freshness, writeAt) : freshness,
+    writeAt,
+  });
   seededMemory.add(key);
 }
 
 function recall<T>(relativePath: string): T | undefined {
-  const key = fileKey(relativePath);
-  if (!memoryValues.has(key)) return undefined;
-  return memoryValues.get(key) as T;
+  return memoryValues.get(fileKey(relativePath))?.value as T | undefined;
+}
+
+function recallWriteAt(relativePath: string): number {
+  return memoryValues.get(fileKey(relativePath))?.writeAt ?? 0;
 }
 
 async function streamToBuffer(stream: ReadableStream<Uint8Array> | null): Promise<Buffer> {
@@ -83,7 +134,9 @@ async function fetchJsonUrl<T>(url: string): Promise<T | undefined> {
 
 async function listExactBlob(pathname: string) {
   const listed = await list({ prefix: pathname, limit: 20 });
-  return listed.blobs.find((blob) => samePath(pathname, blob.pathname));
+  const matches = listed.blobs.filter((blob) => samePath(pathname, blob.pathname));
+  matches.sort((a, b) => +new Date(b.uploadedAt) - +new Date(a.uploadedAt));
+  return matches[0];
 }
 
 async function readBlobJson<T>(pathname: string): Promise<T | undefined> {
@@ -181,14 +234,28 @@ async function wasSeeded(relativePath: string): Promise<boolean> {
   return false;
 }
 
+function preferCachedIfNewer<T>(key: string, incoming: T): T {
+  const cached = recall<T>(key);
+  const writeAt = recallWriteAt(key);
+  const incomingFreshness = jsonFreshness(incoming);
+  if (cached !== undefined && writeAt > 0 && incomingFreshness < writeAt) {
+    return cached;
+  }
+  const cachedFreshness = jsonFreshness(cached);
+  if (cached !== undefined && incomingFreshness < cachedFreshness) {
+    return cached;
+  }
+  remember(key, incoming, "read");
+  return incoming;
+}
+
 export async function readJsonFile<T>(relativePath: string, fallback: T): Promise<T> {
   if (useBlobStore()) {
     const key = fileKey(relativePath);
     const pathname = `${PREFIX}/${key}`;
     const existing = await readBlobJson<T>(pathname);
     if (existing !== undefined) {
-      remember(key, existing);
-      return existing;
+      return preferCachedIfNewer(key, existing);
     }
 
     const cached = recall<T>(key);
@@ -206,9 +273,9 @@ export async function readJsonFile<T>(relativePath: string, fallback: T): Promis
         if (live) {
           const recovered = await fetchJsonUrl<T>(live.url);
           if (recovered !== undefined) {
-            remember(key, recovered);
+            const chosen = preferCachedIfNewer(key, recovered);
             await markSeeded(relativePath);
-            return recovered;
+            return chosen;
           }
           await markSeeded(relativePath);
           return fallback;
@@ -242,7 +309,7 @@ async function readLocalJson<T>(relativePath: string): Promise<T | undefined> {
 
 export async function writeJsonFile(relativePath: string, value: unknown): Promise<void> {
   const body = `${JSON.stringify(value, null, 2)}\n`;
-  remember(relativePath, value);
+  remember(relativePath, value, "write");
   if (useBlobStore()) {
     const pathname = `${PREFIX}/${fileKey(relativePath)}`;
     await put(pathname, body, {
@@ -253,6 +320,7 @@ export async function writeJsonFile(relativePath: string, value: unknown): Promi
       cacheControlMaxAge: 0,
     });
     await markSeeded(relativePath);
+    if (fileKey(relativePath) !== META_FILE) await touchBoardWriteMeta();
     return;
   }
   assertWritableStore("writeJsonFile");
@@ -260,9 +328,51 @@ export async function writeJsonFile(relativePath: string, value: unknown): Promi
     const target = path.join(process.cwd(), "data", relativePath);
     await fs.mkdir(path.dirname(target), { recursive: true });
     await fs.writeFile(target, body, "utf8");
+    if (fileKey(relativePath) !== META_FILE) await touchBoardWriteMeta();
   } catch (error) {
     mapFsWriteError(error);
   }
+}
+
+async function touchBoardWriteMeta() {
+  const meta: BoardWriteMeta = { writtenAt: new Date().toISOString() };
+  remember(META_FILE, meta, "write");
+  if (useBlobStore()) {
+    try {
+      await put(`${PREFIX}/${META_FILE}`, `${JSON.stringify(meta)}\n`, {
+        access: "public",
+        addRandomSuffix: false,
+        allowOverwrite: true,
+        contentType: "application/json",
+        cacheControlMaxAge: 0,
+      });
+    } catch {
+      // This process still has the write clock in memory.
+    }
+    return;
+  }
+  try {
+    const target = path.join(process.cwd(), "data", META_FILE);
+    await fs.mkdir(path.dirname(target), { recursive: true });
+    await fs.writeFile(target, `${JSON.stringify(meta, null, 2)}\n`, "utf8");
+  } catch {
+    // Local meta is best-effort.
+  }
+}
+
+export async function readBoardWriteMeta(): Promise<BoardWriteMeta | null> {
+  const cached = recall<BoardWriteMeta>(META_FILE);
+  if (useBlobStore()) {
+    const blob = await readBlobJson<BoardWriteMeta>(`${PREFIX}/${META_FILE}`);
+    if (blob?.writtenAt) return preferCachedIfNewer(META_FILE, blob);
+    return cached ?? null;
+  }
+  const local = await readLocalJson<BoardWriteMeta>(META_FILE);
+  if (local?.writtenAt) {
+    if (cached?.writtenAt && jsonFreshness(cached) > jsonFreshness(local)) return cached;
+    return local;
+  }
+  return cached ?? null;
 }
 
 export async function writeBinaryFile(

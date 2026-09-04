@@ -13,13 +13,50 @@ export function isNewerStamp(
   return parseUpdatedAt(local) > parseUpdatedAt(remote);
 }
 
+/** Remote wins only when it has a stamp strictly after local. Missing or equal → keep local. */
+export function isRemoteNewer(
+  local: string | null | undefined,
+  remote: string | null | undefined
+): boolean {
+  const remoteAt = parseUpdatedAt(remote);
+  if (remoteAt === 0) return false;
+  return remoteAt > parseUpdatedAt(local);
+}
+
+export function maxUpdatedAt(
+  items: Array<{ updatedAt?: string | null } | null | undefined>
+): number {
+  let max = 0;
+  for (const item of items) {
+    if (!item) continue;
+    max = Math.max(max, parseUpdatedAt(item.updatedAt));
+  }
+  return max;
+}
+
+export function snapshotStamp(input: {
+  writtenAt?: string | null;
+  leads?: Array<{ updatedAt?: string | null }>;
+  guests?: Array<{ updatedAt?: string | null }>;
+  settings?: { ticketsSoldUpdatedAt?: string | null } | null;
+}): number {
+  const meta = parseUpdatedAt(input.writtenAt);
+  if (meta > 0) return meta;
+  return Math.max(
+    maxUpdatedAt(input.leads ?? []),
+    maxUpdatedAt(input.guests ?? []),
+    parseUpdatedAt(input.settings?.ticketsSoldUpdatedAt)
+  );
+}
+
 type Stamped = { id: string; updatedAt?: string | null };
 
 export function mergeByUpdatedAt<T extends Stamped>(
   local: T[],
   remote: T[],
   deletedIds: Set<string>,
-  pendingId?: string | null
+  pendingId?: string | null,
+  lastWriteById?: Map<string, number>
 ): T[] {
   if (remote.length === 0 && local.length > 0) return local;
 
@@ -48,8 +85,14 @@ export function mergeByUpdatedAt<T extends Stamped>(
       continue;
     }
     if (localItem && remoteItem) {
+      const writeAt = lastWriteById?.get(id) ?? 0;
+      const remoteAt = parseUpdatedAt(remoteItem.updatedAt);
+      if (writeAt > 0 && remoteAt <= writeAt) {
+        merged.push(localItem);
+        continue;
+      }
       merged.push(
-        isNewerStamp(localItem.updatedAt, remoteItem.updatedAt) ? localItem : remoteItem
+        isRemoteNewer(localItem.updatedAt, remoteItem.updatedAt) ? remoteItem : localItem
       );
     }
   }
@@ -60,18 +103,20 @@ export function mergeLeads(
   local: Lead[],
   remote: Lead[],
   deletedIds: Set<string>,
-  pendingId?: string | null
+  pendingId?: string | null,
+  lastWriteById?: Map<string, number>
 ): Lead[] {
-  return mergeByUpdatedAt(local, remote, deletedIds, pendingId);
+  return mergeByUpdatedAt(local, remote, deletedIds, pendingId, lastWriteById);
 }
 
 export function mergeGuests(
   local: Guest[],
   remote: Guest[],
   deletedIds: Set<string>,
-  pendingId?: string | null
+  pendingId?: string | null,
+  lastWriteById?: Map<string, number>
 ): Guest[] {
-  return mergeByUpdatedAt(local, remote, deletedIds, pendingId);
+  return mergeByUpdatedAt(local, remote, deletedIds, pendingId, lastWriteById);
 }
 
 export function mergeMembers(
@@ -104,7 +149,7 @@ export function mergeMembers(
 }
 
 export function mergeSettings(local: Settings, remote: Settings): Settings {
-  if (isNewerStamp(local.ticketsSoldUpdatedAt, remote.ticketsSoldUpdatedAt)) {
+  if (!isRemoteNewer(local.ticketsSoldUpdatedAt, remote.ticketsSoldUpdatedAt)) {
     return {
       ...remote,
       ticketsSold: local.ticketsSold,
