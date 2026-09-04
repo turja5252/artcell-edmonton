@@ -27,3 +27,14 @@ export function formatMoney(amount: number): string {
 export function formatSeats(n: number): string {
   return new Intl.NumberFormat("en-CA").format(n || 0);
 }
+
+/** Only amounts the user entered. Declined $0 pledges stay $0 and do not inflate totals. */
+export function countableMoney(lead: { committed: number; received: number }): {
+  committed: number;
+  received: number;
+} {
+  return {
+    committed: lead.committed > 0 ? lead.committed : 0,
+    received: lead.received > 0 ? lead.received : 0,
+  };
+}

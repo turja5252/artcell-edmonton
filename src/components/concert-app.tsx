@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
   type ReactNode,
@@ -37,13 +38,21 @@ import { TeamBoard } from "@/components/team-board";
 import { WhoAmI } from "@/components/who-am-i";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { mergeGuests, mergeLeads, mergeMembers, mergeSettings } from "@/lib/board-sync";
 import { formatMoney } from "@/lib/money";
 import { formatTime } from "@/lib/people";
 import type { Guest, GuestStatus, Lead, Member, Settings } from "@/lib/types";
-import { displayGuestName } from "@/lib/types";
-import { ADMIN_DISPLAY_NAME, canonicalizePersonName, isTeamAdmin } from "@/lib/team-admin";
+import { DECLINED_GLOW_CLASS, displayGuestName, isLeadDeclined } from "@/lib/types";
+import {
+  ADMIN_DISPLAY_NAME,
+  canonicalizePersonName,
+  isTeamAdmin,
+  samePerson,
+} from "@/lib/team-admin";
 import { cn } from "@/lib/utils";
 
+const POLL_MS = 15000;
+const SAVE_POLL_DEBOUNCE_MS = 3000;
 const ME_KEY = "artcell-edmonton-me";
 const ME_EVENT = "artcell-me";
 
@@ -69,9 +78,11 @@ type Tab = "outreach" | "money" | "seats" | "team" | "setlist";
 type Filter = "mine" | "open" | "unassigned" | "done" | "all";
 
 function matches(lead: Lead, query: string, filter: Filter, me: string) {
-  const haystack = `${lead.company} ${lead.assignedTo ?? ""} ${lead.outcome}`.toLowerCase();
+  const haystack = `${lead.company} ${lead.assignedTo ?? ""} ${lead.outcome} ${
+    isLeadDeclined(lead) ? "declined" : ""
+  }`.toLowerCase();
   if (query && !haystack.includes(query.toLowerCase())) return false;
-  if (filter === "mine") return Boolean(me) && lead.assignedTo === me;
+  if (filter === "mine") return Boolean(me) && samePerson(lead.assignedTo, me);
   if (filter === "open") return !lead.done;
   if (filter === "unassigned") return !lead.assignedTo && !lead.done;
   if (filter === "done") return lead.done;
@@ -118,6 +129,16 @@ export function ConcertApp({
   const [syncing, setSyncing] = useState(false);
   const [targetKind, setTargetKind] = useState<"money" | "seats" | null>(null);
   const [ticketsOpen, setTicketsOpen] = useState(false);
+  const savingCount = useRef(0);
+  const lastSaveAt = useRef(0);
+  const busyIdRef = useRef<string | null>(null);
+  const memberSaving = useRef(false);
+  const settingsSaving = useRef(false);
+  const deletedIds = useRef({
+    leads: new Set<string>(),
+    guests: new Set<string>(),
+    members: new Set<string>(),
+  });
 
   const people = useMemo(
     () => members.map((member) => member.name).sort((a, b) => a.localeCompare(b)),
@@ -127,6 +148,7 @@ export function ConcertApp({
   useEffect(() => {
     if (!hydrated || !me) return;
     if (me === ADMIN_DISPLAY_NAME || isTeamAdmin(me)) return;
+    if (people.length === 0) return;
     if (people.includes(me)) return;
     const canonical = canonicalizePersonName(me, people);
     if (canonical && people.includes(canonical)) {
@@ -136,7 +158,28 @@ export function ConcertApp({
     writeMe("");
   }, [hydrated, me, people]);
 
-  const load = useCallback(async () => {
+  function markSaveStart() {
+    savingCount.current += 1;
+    lastSaveAt.current = Date.now();
+  }
+
+  function markSaveEnd() {
+    savingCount.current = Math.max(0, savingCount.current - 1);
+    lastSaveAt.current = Date.now();
+  }
+
+  function saveInFlight() {
+    return (
+      savingCount.current > 0 ||
+      busyIdRef.current != null ||
+      memberSaving.current ||
+      settingsSaving.current ||
+      Date.now() - lastSaveAt.current < SAVE_POLL_DEBOUNCE_MS
+    );
+  }
+
+  const load = useCallback(async (mode: "poll" | "replace" = "replace") => {
+    if (mode === "poll" && saveInFlight()) return;
     const response = await fetch("/api/board", { cache: "no-store" });
     const data = (await response.json()) as {
       leads?: Lead[];
@@ -146,6 +189,26 @@ export function ConcertApp({
       error?: string;
     };
     if (!response.ok) throw new Error(data.error || "Could not load the board");
+    if (mode === "poll") {
+      if (saveInFlight()) return;
+      if (data.leads) {
+        setLeads((current) =>
+          mergeLeads(current, data.leads!, deletedIds.current.leads, busyIdRef.current)
+        );
+      }
+      if (data.guests) {
+        setGuests((current) =>
+          mergeGuests(current, data.guests!, deletedIds.current.guests, busyIdRef.current)
+        );
+      }
+      if (data.members) {
+        setMembers((current) => mergeMembers(current, data.members!, deletedIds.current.members));
+      }
+      if (data.settings) {
+        setSettings((current) => mergeSettings(current, data.settings!));
+      }
+      return;
+    }
     if (data.leads) setLeads(data.leads);
     if (data.guests) setGuests(data.guests);
     if (data.members) setMembers(data.members);
@@ -154,9 +217,9 @@ export function ConcertApp({
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      void load().catch(() => undefined);
-    }, 15000);
-    const onFocus = () => void load().catch(() => undefined);
+      void load("poll").catch(() => undefined);
+    }, POLL_MS);
+    const onFocus = () => void load("poll").catch(() => undefined);
     window.addEventListener("focus", onFocus);
     return () => {
       window.clearInterval(timer);
@@ -185,19 +248,26 @@ export function ConcertApp({
     if (!isTeamAdmin(me)) {
       throw new Error("Switch Updating as to Admin to manage teammates");
     }
-    const response = await fetch("/api/members", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...input, actor: me }),
-    });
-    const data = (await response.json()) as { member?: Member; error?: string };
-    if (!response.ok) throw new Error(data.error || "Could not add member");
-    if (data.member) {
-      setMembers((current) => {
-        if (current.some((member) => member.id === data.member!.id)) return current;
-        return [...current, data.member!].sort((a, b) => a.name.localeCompare(b.name));
+    memberSaving.current = true;
+    markSaveStart();
+    try {
+      const response = await fetch("/api/members", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...input, actor: me }),
       });
-      setToast(`${data.member.name} joined the team`);
+      const data = (await response.json()) as { member?: Member; error?: string };
+      if (!response.ok) throw new Error(data.error || "Could not add member");
+      if (data.member) {
+        setMembers((current) => {
+          if (current.some((member) => member.id === data.member!.id)) return current;
+          return [...current, data.member!].sort((a, b) => a.name.localeCompare(b.name));
+        });
+        setToast(`${data.member.name} joined the team`);
+      }
+    } finally {
+      memberSaving.current = false;
+      markSaveEnd();
     }
   }
 
@@ -206,24 +276,38 @@ export function ConcertApp({
       throw new Error("Switch Updating as to Admin to manage teammates");
     }
     const removed = members.find((member) => member.id === id);
-    const response = await fetch(`/api/members/${id}`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ actor: me }),
-    });
-    const data = (await response.json()) as {
-      members?: Member[];
-      leads?: Lead[];
-      guests?: Guest[];
-      error?: string;
-    };
-    if (!response.ok) throw new Error(data.error || "Could not remove member");
-    if (data.members) setMembers(data.members);
-    else setMembers((current) => current.filter((member) => member.id !== id));
-    if (data.leads) setLeads(data.leads);
-    if (data.guests) setGuests(data.guests);
-    if (removed && me === removed.name) writeMe("");
-    setToast("Removed from the team");
+    memberSaving.current = true;
+    markSaveStart();
+    deletedIds.current.members.add(id);
+    try {
+      const response = await fetch(`/api/members/${id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ actor: me }),
+      });
+      const data = (await response.json()) as {
+        members?: Member[];
+        leads?: Lead[];
+        guests?: Guest[];
+        error?: string;
+      };
+      if (!response.ok) {
+        deletedIds.current.members.delete(id);
+        throw new Error(data.error || "Could not remove member");
+      }
+      if (data.members) setMembers(data.members);
+      else setMembers((current) => current.filter((member) => member.id !== id));
+      if (data.leads) setLeads(data.leads);
+      if (data.guests) setGuests(data.guests);
+      if (removed && me === removed.name) writeMe("");
+      setToast("Removed from the team");
+    } catch (error) {
+      deletedIds.current.members.delete(id);
+      throw error;
+    } finally {
+      memberSaving.current = false;
+      markSaveEnd();
+    }
   }
 
   async function saveMember(
@@ -234,47 +318,53 @@ export function ConcertApp({
       throw new Error("Switch Updating as to Admin to manage teammates");
     }
     const previous = members.find((member) => member.id === id);
-    const response = await fetch(`/api/members/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...input, actor: me }),
-    });
-    const data = (await response.json()) as { member?: Member; error?: string };
-    if (!response.ok) throw new Error(data.error || "Could not save member");
-    if (data.member) {
-      setMembers((current) =>
-        current
-          .map((member) => (member.id === id ? data.member! : member))
-          .sort((a, b) => a.name.localeCompare(b.name))
-      );
-      if (previous && previous.name !== data.member.name) {
-        setLeads((current) =>
-          current.map((lead) => ({
-            ...lead,
-            assignedTo:
-              lead.assignedTo === previous.name ? data.member!.name : lead.assignedTo,
-            receivedBy:
-              lead.receivedBy === previous.name ? data.member!.name : lead.receivedBy,
-            updatedBy:
-              lead.updatedBy === previous.name ? data.member!.name : lead.updatedBy,
-          }))
+    memberSaving.current = true;
+    markSaveStart();
+    try {
+      const response = await fetch(`/api/members/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...input, actor: me }),
+      });
+      const data = (await response.json()) as { member?: Member; error?: string };
+      if (!response.ok) throw new Error(data.error || "Could not save member");
+      if (data.member) {
+        setMembers((current) =>
+          current
+            .map((member) => (member.id === id ? data.member! : member))
+            .sort((a, b) => a.name.localeCompare(b.name))
         );
-        setGuests((current) =>
-          current.map((guest) => ({
-            ...guest,
-            assignedTo:
-              guest.assignedTo === previous.name
-                ? data.member!.name
-                : guest.assignedTo,
-            updatedBy:
-              guest.updatedBy === previous.name ? data.member!.name : guest.updatedBy,
-          }))
-        );
-        if (me === previous.name) writeMe(data.member.name);
+        if (previous && previous.name !== data.member.name) {
+          setLeads((current) =>
+            current.map((lead) => ({
+              ...lead,
+              assignedTo:
+                lead.assignedTo === previous.name ? data.member!.name : lead.assignedTo,
+              receivedBy:
+                lead.receivedBy === previous.name ? data.member!.name : lead.receivedBy,
+              updatedBy:
+                lead.updatedBy === previous.name ? data.member!.name : lead.updatedBy,
+            }))
+          );
+          setGuests((current) =>
+            current.map((guest) => ({
+              ...guest,
+              assignedTo:
+                guest.assignedTo === previous.name
+                  ? data.member!.name
+                  : guest.assignedTo,
+              updatedBy:
+                guest.updatedBy === previous.name ? data.member!.name : guest.updatedBy,
+            }))
+          );
+          if (me === previous.name) writeMe(data.member.name);
+        }
+        setToast(`${data.member.name} updated`);
       }
-      setToast(`${data.member.name} updated`);
+    } finally {
+      memberSaving.current = false;
+      markSaveEnd();
     }
-    await load();
   }
 
   function setWhoOpen(open: boolean) {
@@ -289,6 +379,8 @@ export function ConcertApp({
 
   async function saveLead(id: string, patch: Partial<Lead> & { actor?: string }) {
     setBusyId(id);
+    busyIdRef.current = id;
+    markSaveStart();
     setLeads((current) =>
       current.map((lead) =>
         lead.id === id
@@ -329,14 +421,18 @@ export function ConcertApp({
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Update failed");
-      await load();
+      await load("replace");
     } finally {
       setBusyId(null);
+      busyIdRef.current = null;
+      markSaveEnd();
     }
   }
 
   async function deleteLead(id: string) {
     const removed = leads.find((lead) => lead.id === id);
+    deletedIds.current.leads.add(id);
+    markSaveStart();
     setLeads((current) => current.filter((lead) => lead.id !== id));
     setActive(null);
     try {
@@ -345,25 +441,35 @@ export function ConcertApp({
       if (!response.ok) throw new Error(data.error || "Could not delete");
       setToast(removed ? `Removed ${removed.company}` : "Entry deleted");
     } catch (err) {
+      deletedIds.current.leads.delete(id);
       setError(err instanceof Error ? err.message : "Could not delete");
-      await load();
+      await load("replace");
+    } finally {
+      markSaveEnd();
     }
   }
 
   async function addLead(company: string, assignedTo: string | null) {
-    const response = await fetch("/api/leads", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ company, assignedTo, actor: me }),
-    });
-    const data = (await response.json()) as { lead?: Lead; error?: string };
-    if (!response.ok) throw new Error(data.error || "Could not add");
-    if (data.lead) setLeads((current) => [...current, data.lead!]);
-    setToast(`${company} is on the board`);
+    markSaveStart();
+    try {
+      const response = await fetch("/api/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company, assignedTo, actor: me }),
+      });
+      const data = (await response.json()) as { lead?: Lead; error?: string };
+      if (!response.ok) throw new Error(data.error || "Could not add");
+      if (data.lead) setLeads((current) => [...current, data.lead!]);
+      setToast(`${company} is on the board`);
+    } finally {
+      markSaveEnd();
+    }
   }
 
   async function saveGuest(id: string, patch: Partial<Guest> & { actor?: string }) {
     setBusyId(id);
+    busyIdRef.current = id;
+    markSaveStart();
     setGuests((current) =>
       current.map((guest) =>
         guest.id === id
@@ -404,68 +510,87 @@ export function ConcertApp({
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Update failed");
-      await load();
+      await load("replace");
     } finally {
       setBusyId(null);
+      busyIdRef.current = null;
+      markSaveEnd();
     }
   }
 
   async function addGuest(input: AddGuestInput) {
-    const response = await fetch("/api/guests", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...input, actor: me }),
-    });
-    const data = (await response.json()) as { guest?: Guest; error?: string };
-    if (!response.ok) throw new Error(data.error || "Could not add");
-    if (data.guest) setGuests((current) => [...current, data.guest!]);
-    setToast(`${displayGuestName(data.guest ?? input)} is on the call list`);
+    markSaveStart();
+    try {
+      const response = await fetch("/api/guests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...input, actor: me }),
+      });
+      const data = (await response.json()) as { guest?: Guest; error?: string };
+      if (!response.ok) throw new Error(data.error || "Could not add");
+      if (data.guest) setGuests((current) => [...current, data.guest!]);
+      setToast(`${displayGuestName(data.guest ?? input)} is on the call list`);
+    } finally {
+      markSaveEnd();
+    }
   }
 
   async function addGuests(inputs: AddGuestInput[]) {
-    const response = await fetch("/api/guests", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ guests: inputs, actor: me }),
-    });
-    const data = (await response.json()) as {
-      guests?: Guest[];
-      added?: number;
-      skipped?: number;
-      error?: string;
-    };
-    if (!response.ok) throw new Error(data.error || "Could not add contacts");
-    if (data.guests?.length) {
-      setGuests((current) => [...current, ...data.guests!]);
+    markSaveStart();
+    try {
+      const response = await fetch("/api/guests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ guests: inputs, actor: me }),
+      });
+      const data = (await response.json()) as {
+        guests?: Guest[];
+        added?: number;
+        skipped?: number;
+        error?: string;
+      };
+      if (!response.ok) throw new Error(data.error || "Could not add contacts");
+      if (data.guests?.length) {
+        setGuests((current) => [...current, ...data.guests!]);
+      }
+      const added = data.added ?? data.guests?.length ?? 0;
+      const skipped = data.skipped ?? 0;
+      if (added) {
+        setToast(
+          skipped
+            ? `Added ${added} from your phone · skipped ${skipped} duplicates`
+            : `Added ${added} from your phone`
+        );
+      } else if (skipped) {
+        setToast("Those contacts are already on the list");
+      }
+      return { added, skipped };
+    } finally {
+      markSaveEnd();
     }
-    const added = data.added ?? data.guests?.length ?? 0;
-    const skipped = data.skipped ?? 0;
-    if (added) {
-      setToast(
-        skipped
-          ? `Added ${added} from your phone · skipped ${skipped} duplicates`
-          : `Added ${added} from your phone`
-      );
-    } else if (skipped) {
-      setToast("Those contacts are already on the list");
-    }
-    return { added, skipped };
   }
 
   async function saveSettings(patch: Partial<Settings>) {
     const next = { ...settings, ...patch };
     setSettings(next);
-    const response = await fetch("/api/settings", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...patch, actor: me }),
-    });
-    const data = (await response.json()) as { settings?: Settings; error?: string };
-    if (!response.ok) throw new Error(data.error || "Could not save target");
-    if (data.settings) setSettings(data.settings);
-    setToast(
-      patch.ticketsSold !== undefined ? "Ticket count saved" : "Target saved"
-    );
+    settingsSaving.current = true;
+    markSaveStart();
+    try {
+      const response = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...patch, actor: me }),
+      });
+      const data = (await response.json()) as { settings?: Settings; error?: string };
+      if (!response.ok) throw new Error(data.error || "Could not save target");
+      if (data.settings) setSettings(data.settings);
+      setToast(
+        patch.ticketsSold !== undefined ? "Ticket count saved" : "Target saved"
+      );
+    } finally {
+      settingsSaving.current = false;
+      markSaveEnd();
+    }
   }
 
   async function syncSheet() {
@@ -512,14 +637,14 @@ export function ConcertApp({
   const doneCount = leads.filter((lead) => lead.done).length;
   const openCount = leads.length - doneCount;
   const unassignedCount = leads.filter((lead) => !lead.assignedTo && !lead.done).length;
-  const myOpen = leads.filter((lead) => lead.assignedTo === me && !lead.done).length;
+  const myOpen = leads.filter((lead) => samePerson(lead.assignedTo, me) && !lead.done).length;
 
   const visible = leads
     .filter((lead) => matches(lead, query, filter, me))
     .sort((a, b) => Number(a.done) - Number(b.done) || a.company.localeCompare(b.company));
 
   const filters: { id: Filter; label: string; count: number }[] = [
-    { id: "mine", label: me ? `${me.split(" ")[0]}` : "Mine", count: me ? leads.filter((l) => l.assignedTo === me).length : 0 },
+    { id: "mine", label: me ? `${me.split(" ")[0]}` : "Mine", count: me ? leads.filter((l) => samePerson(l.assignedTo, me)).length : 0 },
     { id: "open", label: "Open", count: openCount },
     { id: "unassigned", label: "Need owner", count: unassignedCount },
     { id: "done", label: "Done", count: doneCount },
@@ -622,7 +747,7 @@ export function ConcertApp({
             className="ml-2 h-8"
             onClick={() => {
               setError("");
-              void load();
+              void load("replace");
             }}
           >
             Retry
@@ -957,12 +1082,14 @@ function LeadCard({
   onClaim: () => void;
   onToggleDone: () => void;
 }) {
-  const mine = Boolean(me) && lead.assignedTo === me;
+  const mine = Boolean(me) && samePerson(lead.assignedTo, me);
+  const declined = isLeadDeclined(lead);
   return (
     <article
       className={cn(
         "rounded-2xl border border-border/80 bg-card/80 p-3 shadow-sm backdrop-blur-sm",
-        lead.done && "opacity-75"
+        declined && DECLINED_GLOW_CLASS,
+        lead.done && !declined && "opacity-75"
       )}
     >
       <button type="button" onClick={onOpen} className="w-full text-left">
@@ -975,6 +1102,11 @@ function LeadCard({
               ) : (
                 <span className="text-xs text-primary">Nobody claimed this yet</span>
               )}
+              {declined ? (
+                <span className="rounded-full bg-destructive/15 px-2 py-0.5 text-xs font-medium text-destructive">
+                  Declined
+                </span>
+              ) : null}
               {lead.done ? (
                 <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-300">
                   Done

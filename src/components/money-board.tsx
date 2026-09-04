@@ -1,8 +1,8 @@
 "use client";
 
 import { PersonChip } from "@/components/person-chip";
-import { formatMoney } from "@/lib/money";
-import type { Lead } from "@/lib/types";
+import { countableMoney, formatMoney } from "@/lib/money";
+import { DECLINED_GLOW_CLASS, isLeadDeclined, type Lead } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -14,11 +14,11 @@ type Props = {
 };
 
 export function MoneyBoard({ leads, members, target, onSetTarget, onOpenLead }: Props) {
-  const committed = leads.reduce((sum, lead) => sum + lead.committed, 0);
-  const received = leads.reduce((sum, lead) => sum + lead.received, 0);
+  const committed = leads.reduce((sum, lead) => sum + countableMoney(lead).committed, 0);
+  const received = leads.reduce((sum, lead) => sum + countableMoney(lead).received, 0);
   const remaining = Math.max(0, target - committed);
   const outstanding = Math.max(0, committed - received);
-  const pledgedCount = leads.filter((lead) => lead.committed > 0).length;
+  const pledgedCount = leads.filter((lead) => countableMoney(lead).committed > 0).length;
   const percent = target > 0 ? Math.min(100, Math.round((committed / target) * 100)) : 0;
 
   const people = members
@@ -26,8 +26,8 @@ export function MoneyBoard({ leads, members, target, onSetTarget, onOpenLead }: 
       const mine = leads.filter((lead) => lead.assignedTo === member.name);
       return {
         name: member.name,
-        committed: mine.reduce((sum, lead) => sum + lead.committed, 0),
-        received: mine.reduce((sum, lead) => sum + lead.received, 0),
+        committed: mine.reduce((sum, lead) => sum + countableMoney(lead).committed, 0),
+        received: mine.reduce((sum, lead) => sum + countableMoney(lead).received, 0),
       };
     })
     .filter((row) => row.committed > 0 || row.received > 0)
@@ -113,12 +113,18 @@ export function MoneyBoard({ leads, members, target, onSetTarget, onOpenLead }: 
           Companies
         </h2>
         <ul className="space-y-2">
-          {ranked.map((lead) => (
+          {ranked.map((lead) => {
+            const declined = isLeadDeclined(lead);
+            const money = countableMoney(lead);
+            return (
             <li key={lead.id}>
               <button
                 type="button"
                 onClick={() => onOpenLead(lead)}
-                className="flex w-full items-center justify-between gap-3 rounded-2xl border border-border/80 bg-card/80 p-3 text-left"
+                className={cn(
+                  "flex w-full items-center justify-between gap-3 rounded-2xl border border-border/80 bg-card/80 p-3 text-left",
+                  declined && DECLINED_GLOW_CLASS
+                )}
               >
                 <span>
                   <span className="block font-medium">{lead.company}</span>
@@ -128,28 +134,38 @@ export function MoneyBoard({ leads, members, target, onSetTarget, onOpenLead }: 
                     ) : (
                       <span className="text-xs text-muted-foreground">Unassigned</span>
                     )}
+                    {declined ? (
+                      <span className="rounded-full bg-destructive/15 px-2 py-0.5 text-xs font-medium text-destructive">
+                        Declined
+                      </span>
+                    ) : null}
                   </span>
                 </span>
                 <span className="text-right">
                   <span
                     className={cn(
                       "font-heading block text-xl tabular-nums",
-                      lead.committed > 0 ? "text-primary" : "text-muted-foreground"
+                      money.committed > 0 ? "text-primary" : "text-muted-foreground"
                     )}
                   >
-                    {lead.committed > 0 ? formatMoney(lead.committed) : "Add $"}
+                    {money.committed > 0
+                      ? formatMoney(money.committed)
+                      : declined
+                        ? formatMoney(0)
+                        : "Add $"}
                   </span>
-                  {lead.received > 0 ? (
+                  {money.received > 0 ? (
                     <span className="text-xs text-muted-foreground">
                       {lead.receivedBy
-                        ? `${lead.receivedBy.split(" ")[0]} collected ${formatMoney(lead.received)}`
-                        : `received ${formatMoney(lead.received)}`}
+                        ? `${lead.receivedBy.split(" ")[0]} collected ${formatMoney(money.received)}`
+                        : `received ${formatMoney(money.received)}`}
                     </span>
                   ) : null}
                 </span>
               </button>
             </li>
-          ))}
+            );
+          })}
         </ul>
       </section>
     </div>

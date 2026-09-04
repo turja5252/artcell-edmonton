@@ -23,6 +23,7 @@ export type Lead = {
   company: string;
   assignedTo: string | null;
   done: boolean;
+  declined: boolean;
   outcome: string;
   committed: number;
   received: number;
@@ -35,7 +36,14 @@ export type Lead = {
 export type LeadPatch = Partial<
   Pick<
     Lead,
-    "assignedTo" | "done" | "outcome" | "company" | "committed" | "received" | "receivedBy"
+    | "assignedTo"
+    | "done"
+    | "declined"
+    | "outcome"
+    | "company"
+    | "committed"
+    | "received"
+    | "receivedBy"
   >
 > & {
   actor?: string | null;
@@ -112,6 +120,35 @@ export const OUTCOME_CHIPS = [
   "Declined",
   "Can't reach",
 ] as const;
+
+/** Ring + red glow for declined sponsor cards (Calls + Money). Not a full red fill. */
+export const DECLINED_GLOW_CLASS =
+  "ring-2 ring-destructive/80 shadow-[0_0_18px_2px_rgba(239,68,68,0.42)]";
+
+const DECLINED_OUTCOME_RE =
+  /declined|said\s+no|not\s+interested|\bpass\b|\bnope\b|\bno thanks\b/i;
+
+export function isDeclinedOutcome(outcome: string | null | undefined): boolean {
+  const text = (outcome ?? "").trim();
+  if (!text) return false;
+  return DECLINED_OUTCOME_RE.test(text);
+}
+
+/** Explicit `declined` wins; missing field is inferred from outcome text (legacy rows). */
+export function resolveLeadDeclined(lead: {
+  declined?: boolean | null;
+  outcome?: string | null;
+}): boolean {
+  if (typeof lead.declined === "boolean") return lead.declined;
+  return isDeclinedOutcome(lead.outcome);
+}
+
+export function isLeadDeclined(lead: {
+  declined?: boolean | null;
+  outcome?: string | null;
+}): boolean {
+  return lead.declined === true || isDeclinedOutcome(lead.outcome);
+}
 
 export const GUEST_STATUSES: { id: GuestStatus; label: string }[] = [
   { id: "not_called", label: "Not called" },

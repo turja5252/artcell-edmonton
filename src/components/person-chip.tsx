@@ -1,5 +1,6 @@
 import { personHue } from "@/lib/ids";
 import { initials } from "@/lib/people";
+import { displayPersonName } from "@/lib/team-admin";
 import { cn } from "@/lib/utils";
 
 export function PersonChip({
@@ -11,7 +12,8 @@ export function PersonChip({
   compact?: boolean;
   className?: string;
 }) {
-  const hue = personHue(name);
+  const label = displayPersonName(name);
+  const hue = personHue(label);
   return (
     <span
       className={cn(
@@ -29,9 +31,9 @@ export function PersonChip({
         className="grid size-4 place-items-center rounded-full text-[9px] font-bold"
         style={{ background: `oklch(0.55 0.12 ${hue})`, color: "oklch(0.16 0.03 50)" }}
       >
-        {initials(name)}
+        {initials(label)}
       </span>
-      {!compact && name}
+      {!compact && label}
     </span>
   );
 }

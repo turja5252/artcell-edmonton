@@ -17,7 +17,13 @@ import { PersonChip } from "@/components/person-chip";
 import { LeadAttachments } from "@/components/lead-attachments";
 import { formatMoney, parseMoney } from "@/lib/money";
 import { isTeamAdmin } from "@/lib/team-admin";
-import { MONEY_CHIPS, OUTCOME_CHIPS, type Lead } from "@/lib/types";
+import {
+  isDeclinedOutcome,
+  isLeadDeclined,
+  MONEY_CHIPS,
+  OUTCOME_CHIPS,
+  type Lead,
+} from "@/lib/types";
 
 function defaultCollector(assignedTo: string, me: string): string {
   const assigned = assignedTo.trim();
@@ -83,6 +89,7 @@ function LeadEditorForm({
   const [outcome, setOutcome] = useState(lead.outcome);
   const [assignedTo, setAssignedTo] = useState(lead.assignedTo ?? "");
   const [done, setDone] = useState(lead.done);
+  const [declined, setDeclined] = useState(isLeadDeclined(lead));
   const [committed, setCommitted] = useState(lead.committed ? String(lead.committed) : "");
   const [received, setReceived] = useState(lead.received ? String(lead.received) : "");
   const [receivedBy, setReceivedBy] = useState(() => {
@@ -100,6 +107,7 @@ function LeadEditorForm({
     outcome?: string;
     assignedTo?: string;
     done?: boolean;
+    declined?: boolean;
     committed?: string;
     received?: string;
     receivedBy?: string;
@@ -108,6 +116,12 @@ function LeadEditorForm({
     const nextOutcome = next.outcome ?? outcome;
     const nextAssigned = next.assignedTo ?? assignedTo;
     const nextDone = next.done ?? done;
+    const nextDeclined =
+      next.declined !== undefined
+        ? next.declined
+        : next.outcome !== undefined
+          ? isDeclinedOutcome(nextOutcome)
+          : declined;
     const nextCommitted = next.committed ?? committed;
     const nextReceived = next.received ?? received;
     let nextReceivedBy = next.receivedBy ?? receivedBy;
@@ -125,6 +139,7 @@ function LeadEditorForm({
     setOutcome(nextOutcome);
     setAssignedTo(nextAssigned);
     setDone(nextDone);
+    setDeclined(nextDeclined);
     setCommitted(nextCommitted);
     setReceived(nextReceived);
     setReceivedBy(nextReceivedBy);
@@ -133,6 +148,7 @@ function LeadEditorForm({
       outcome: nextOutcome,
       assignedTo: nextAssigned || null,
       done: nextDone,
+      declined: nextDeclined,
       committed: parseMoney(nextCommitted),
       received: parsedReceived,
       receivedBy: parsedReceived > 0 ? nextReceivedBy || null : null,
@@ -148,7 +164,7 @@ function LeadEditorForm({
             {company || lead.company}
           </SheetTitle>
           <SheetDescription>
-            Tap a result, claim it, or mark it done. Everyone on this link sees the update.
+            Tap chips to update now, or edit and Save. Mark completed when there is nothing left to do — that is not the same as declined.
           </SheetDescription>
         </SheetHeader>
 
@@ -157,22 +173,13 @@ function LeadEditorForm({
             <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
               Entry name
             </p>
-            <div className="flex gap-2">
-              <Input
-                value={company}
-                onChange={(event) => setCompany(event.target.value)}
-                placeholder="Company or person"
-                className="h-12 text-base"
-              />
-              <Button
-                type="button"
-                variant="secondary"
-                className="h-12 px-4"
-                onClick={() => persist({ company })}
-              >
-                Save
-              </Button>
-            </div>
+            <Input
+              value={company}
+              onChange={(event) => setCompany(event.target.value)}
+              onBlur={() => void persist({ company })}
+              placeholder="Company or person"
+              className="h-12 text-base"
+            />
           </section>
 
           <section className="space-y-2">
@@ -202,22 +209,13 @@ function LeadEditorForm({
                 </Button>
               )}
             </div>
-            <div className="flex gap-2">
-              <Input
-                value={assignedTo}
-                onChange={(event) => setAssignedTo(event.target.value)}
-                placeholder="Type a name"
-                className="h-12 text-base"
-              />
-              <Button
-                type="button"
-                variant="secondary"
-                className="h-12 px-4"
-                onClick={() => persist({ assignedTo })}
-              >
-                Save
-              </Button>
-            </div>
+            <Input
+              value={assignedTo}
+              onChange={(event) => setAssignedTo(event.target.value)}
+              onBlur={() => void persist({ assignedTo })}
+              placeholder="Type a name"
+              className="h-12 text-base"
+            />
           </section>
 
           <section className="space-y-2">
@@ -243,6 +241,7 @@ function LeadEditorForm({
                 <Input
                   value={committed}
                   onChange={(event) => setCommitted(event.target.value)}
+                  onBlur={() => void persist({ committed })}
                   inputMode="decimal"
                   placeholder="0"
                   className="h-12 text-base"
@@ -262,6 +261,7 @@ function LeadEditorForm({
                       setReceivedBy("");
                     }
                   }}
+                  onBlur={() => void persist({ received, receivedBy })}
                   inputMode="decimal"
                   placeholder="0"
                   className="h-12 text-base"
@@ -319,9 +319,22 @@ function LeadEditorForm({
                 <Button
                   key={chip}
                   type="button"
-                  variant={outcome === chip ? "default" : "outline"}
+                  variant={
+                    chip === "Declined"
+                      ? declined || outcome === chip
+                        ? "destructive"
+                        : "outline"
+                      : outcome === chip
+                        ? "default"
+                        : "outline"
+                  }
                   className="h-12 whitespace-normal px-3 text-sm leading-tight"
-                  onClick={() => persist({ outcome: chip })}
+                  onClick={() =>
+                    persist({
+                      outcome: chip,
+                      declined: chip === "Declined",
+                    })
+                  }
                 >
                   {chip}
                 </Button>
@@ -351,6 +364,32 @@ function LeadEditorForm({
         </div>
 
         <SheetFooter className="mt-4 gap-2 sm:flex-col">
+          <Button
+            type="button"
+            className="h-14 w-full text-base"
+            variant={declined ? "outline" : "destructive"}
+            disabled={busy || deleting}
+            onClick={() => {
+              if (declined) {
+                const trimmed = outcome.trim();
+                const shortDecline =
+                  /^(declined\.?|said no|not interested|pass|nope|no thanks)$/i.test(
+                    trimmed
+                  );
+                void persist({
+                  declined: false,
+                  outcome: shortDecline ? "" : outcome,
+                });
+                return;
+              }
+              void persist({
+                declined: true,
+                outcome: outcome.trim() || "Declined",
+              });
+            }}
+          >
+            {declined ? "Clear declined" : "Mark declined"}
+          </Button>
           <Button
             type="button"
             className="h-14 w-full text-base"

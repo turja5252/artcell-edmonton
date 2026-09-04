@@ -10,7 +10,7 @@ import type {
   MemberPatch,
   Settings,
 } from "@/lib/types";
-import { displayGuestName, normalizeGuestStatus } from "@/lib/types";
+import { displayGuestName, normalizeGuestStatus, resolveLeadDeclined } from "@/lib/types";
 import {
   assertAllowedAttachment,
   deleteAttachmentFile,
@@ -20,7 +20,16 @@ import {
   writeAttachmentFile,
 } from "@/lib/attachments";
 import { readJsonFile, writeJsonFile } from "@/lib/persist";
-import { assertTeamAdminActor, resolveAssignee } from "@/lib/team-admin";
+import {
+  assertTeamAdminActor,
+  canonicalizeMembers,
+  isKhaledAlias,
+  KHALED_CANONICAL,
+  resolveActorName,
+  resolveAssignee,
+  rewriteStoredPersonName,
+  samePerson,
+} from "@/lib/team-admin";
 
 const LEADS_FILE = "leads.json";
 const GUESTS_FILE = "guests.json";
@@ -48,12 +57,16 @@ function enqueue<T>(job: () => Promise<T>): Promise<T> {
 
 function stamp<T extends { updatedAt: string | null; updatedBy: string | null }>(
   item: T,
-  actor?: string | null
+  actor?: string | null,
+  allowedNames: Iterable<string> = []
 ): T {
+  const nextActor =
+    resolveActorName(actor, allowedNames) ||
+    rewriteStoredPersonName(item.updatedBy, allowedNames);
   return {
     ...item,
     updatedAt: new Date().toISOString(),
-    updatedBy: actor?.trim() || item.updatedBy,
+    updatedBy: nextActor,
   };
 }
 
@@ -69,22 +82,24 @@ function normalizeAttachment(raw: Partial<LeadAttachment> & { id: string; fileNa
 }
 
 function normalizeLead(lead: Partial<Lead> & { company: string; id: string }): Lead {
+  const outcome = lead.outcome ?? "";
   return {
     id: lead.id,
     company: lead.company,
-    assignedTo: lead.assignedTo?.trim() || null,
+    assignedTo: rewriteStoredPersonName(lead.assignedTo) || lead.assignedTo?.trim() || null,
     done: Boolean(lead.done),
-    outcome: lead.outcome ?? "",
+    declined: resolveLeadDeclined({ declined: lead.declined, outcome }),
+    outcome,
     committed: parseMoney(lead.committed),
     received: parseMoney(lead.received),
-    receivedBy: lead.receivedBy?.trim() || null,
+    receivedBy: rewriteStoredPersonName(lead.receivedBy) || lead.receivedBy?.trim() || null,
     attachments: Array.isArray(lead.attachments)
       ? lead.attachments
           .filter((item): item is LeadAttachment => Boolean(item?.id && item?.fileName))
           .map((item) => normalizeAttachment(item))
       : [],
     updatedAt: lead.updatedAt ?? null,
-    updatedBy: lead.updatedBy ?? null,
+    updatedBy: rewriteStoredPersonName(lead.updatedBy) ?? lead.updatedBy ?? null,
   };
 }
 
@@ -114,14 +129,14 @@ function normalizeGuest(
     name,
     phone: guest.phone?.trim() || "",
     email: guest.email?.trim() || "",
-    assignedTo: guest.assignedTo?.trim() || null,
+    assignedTo: rewriteStoredPersonName(guest.assignedTo) || guest.assignedTo?.trim() || null,
     status: normalizeGuestStatus(guest.status),
     partySize: Math.max(1, parseCount(guest.partySize) || 1),
     ticketBought: Boolean(guest.ticketBought),
     lastContactedAt: guest.lastContactedAt ?? null,
     notes: guest.notes ?? "",
     updatedAt: guest.updatedAt ?? null,
-    updatedBy: guest.updatedBy ?? null,
+    updatedBy: rewriteStoredPersonName(guest.updatedBy) ?? guest.updatedBy ?? null,
   };
 }
 
@@ -152,11 +167,15 @@ function normalizeMember(member: Partial<Member> & { name: string; id: string })
   };
 }
 
+function membersSignature(members: Member[]): string {
+  return members
+    .map((member) => `${member.id}\t${member.name}\t${member.phone}\t${member.email}`)
+    .join("\n");
+}
+
 async function readMembersFile(): Promise<Member[]> {
   const parsed = await readJsonFile<Member[]>(MEMBERS_FILE, []);
-  return parsed
-    .map((member) => normalizeMember(member))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  return canonicalizeMembers(parsed.map((member) => normalizeMember(member)));
 }
 
 async function writeMembersFile(members: Member[]) {
@@ -204,47 +223,47 @@ export function getBoard(): Promise<{
   settings: Settings;
 }> {
   return enqueue(async () => {
-    let members = await readMembersFile();
-    const withoutDupes = members.filter(
-      (member) =>
-        member.id !== "novel" && member.name.trim().toLowerCase() !== "novel"
-    );
-    if (withoutDupes.length !== members.length) {
-      await writeMembersFile(withoutDupes);
-      members = withoutDupes;
+    const membersRaw = await readJsonFile<Member[]>(MEMBERS_FILE, []);
+    const membersNormalized = membersRaw.map((member) => normalizeMember(member));
+    const members = canonicalizeMembers(membersNormalized);
+    // Persist Novel→Khaled fold only when the roster rows actually changed.
+    if (members.length > 0 && membersSignature(members) !== membersSignature(membersNormalized)) {
+      await writeMembersFile(members);
+    }
+
+    const leadsOriginal = await readLeadsFile();
+    const guestsOriginal = await readGuestsFile();
+
+    // Empty roster is a blob miss / fallback — never "clear everyone" and write that back.
+    if (members.length === 0) {
+      return {
+        leads: leadsOriginal,
+        guests: guestsOriginal,
+        members,
+        settings: await readSettingsFile(),
+      };
     }
 
     const allowedNames = members.map((member) => member.name);
-    const allowed = new Set(allowedNames);
-    const leadsOriginal = await readLeadsFile();
-    const guestsOriginal = await readGuestsFile();
-    const leads = clearMissingLeadAssignees(
-      leadsOriginal.map((lead) => ({
-        ...lead,
-        assignedTo: resolveAssignee(lead.assignedTo, allowedNames),
-        receivedBy: resolveAssignee(lead.receivedBy, allowedNames),
-        updatedBy: resolveAssignee(lead.updatedBy, allowedNames) ?? lead.updatedBy,
-      })),
-      allowed
-    );
-    const guests = clearMissingGuestAssignees(
-      guestsOriginal.map((guest) => ({
-        ...guest,
-        assignedTo: resolveAssignee(guest.assignedTo, allowedNames),
-        updatedBy: resolveAssignee(guest.updatedBy, allowedNames) ?? guest.updatedBy,
-      })),
-      allowed
-    );
+    const leads = leadsOriginal.map((lead) => ({
+      ...lead,
+      assignedTo: canonicalizeStoredAssignee(lead.assignedTo, allowedNames),
+      receivedBy: canonicalizeStoredAssignee(lead.receivedBy, allowedNames),
+      updatedBy: resolveActorName(lead.updatedBy, allowedNames) ?? lead.updatedBy,
+    }));
+    const guests = guestsOriginal.map((guest) => ({
+      ...guest,
+      assignedTo: canonicalizeStoredAssignee(guest.assignedTo, allowedNames),
+      updatedBy: resolveActorName(guest.updatedBy, allowedNames) ?? guest.updatedBy,
+    }));
+
     const leadsDirty = leads.some(
       (lead, index) =>
         lead.assignedTo !== leadsOriginal[index]?.assignedTo ||
-        lead.receivedBy !== leadsOriginal[index]?.receivedBy ||
-        lead.updatedBy !== leadsOriginal[index]?.updatedBy
+        lead.receivedBy !== leadsOriginal[index]?.receivedBy
     );
     const guestsDirty = guests.some(
-      (guest, index) =>
-        guest.assignedTo !== guestsOriginal[index]?.assignedTo ||
-        guest.updatedBy !== guestsOriginal[index]?.updatedBy
+      (guest, index) => guest.assignedTo !== guestsOriginal[index]?.assignedTo
     );
     if (leadsDirty) await writeLeadsFile(leads);
     if (guestsDirty) await writeGuestsFile(guests);
@@ -277,6 +296,7 @@ export function createLead(input: {
         company,
         assignedTo: resolveAssignee(input.assignedTo, allowedNames),
         done: false,
+        declined: false,
         outcome: "",
         committed: 0,
         received: 0,
@@ -285,7 +305,8 @@ export function createLead(input: {
         updatedAt: null,
         updatedBy: null,
       }),
-      input.actor
+      input.actor,
+      allowedNames
     );
     leads.push(lead);
     await writeLeadsFile(leads);
@@ -320,20 +341,29 @@ export function patchLead(id: string, patch: LeadPatch): Promise<Lead> {
     if (received > 0 && !receivedBy) {
       receivedBy = assignedTo || resolveAssignee(patch.actor, allowedNames);
     }
+    const outcome = patch.outcome === undefined ? current.outcome : patch.outcome;
+    const declined =
+      patch.declined !== undefined
+        ? Boolean(patch.declined)
+        : patch.outcome !== undefined
+          ? resolveLeadDeclined({ outcome })
+          : current.declined;
     const next = stamp(
       normalizeLead({
         ...current,
         company: patch.company?.trim() || current.company,
         assignedTo,
         done: patch.done ?? current.done,
-        outcome: patch.outcome === undefined ? current.outcome : patch.outcome,
+        declined,
+        outcome,
         committed:
           patch.committed === undefined ? current.committed : parseMoney(patch.committed),
         received,
         receivedBy,
         attachments: current.attachments,
       }),
-      patch.actor
+      patch.actor,
+      allowedNames
     );
     leads[index] = next;
     await writeLeadsFile(leads);
@@ -457,6 +487,7 @@ export function mergeSheetRows(
             company,
             assignedTo: row.assignedTo?.trim() || null,
             done: false,
+            declined: false,
             outcome: "",
             committed: 0,
             received: 0,
@@ -687,14 +718,16 @@ export function createMember(input: {
 }): Promise<Member> {
   return enqueue(async () => {
     assertTeamAdminActor(input.actor);
-    const name = input.name.trim();
+    let name = input.name.trim();
     if (!name) throw new Error("Name is required");
     if (name.toLowerCase() === "admin") {
       throw new Error("Admin is reserved — pick it under Updating as");
     }
+    if (isKhaledAlias(name)) name = KHALED_CANONICAL;
     const members = await readMembersFile();
     const existing = members.find(
-      (member) => member.name.toLowerCase() === name.toLowerCase()
+      (member) =>
+        member.name.toLowerCase() === name.toLowerCase() || samePerson(member.name, name)
     );
     if (existing) return existing;
     const member = normalizeMember({
@@ -719,14 +752,17 @@ export function patchMember(id: string, patch: MemberPatch): Promise<Member> {
     const index = members.findIndex((member) => member.id === id);
     if (index === -1) throw new Error("Member not found");
     const current = members[index];
-    const nextName = patch.name?.trim() || current.name;
+    let nextName = patch.name?.trim() || current.name;
     if (nextName.toLowerCase() === "admin") {
       throw new Error("Admin is reserved — pick it under Updating as");
     }
+    if (isKhaledAlias(nextName)) nextName = KHALED_CANONICAL;
     if (
       members.some(
         (member) =>
-          member.id !== id && member.name.toLowerCase() === nextName.toLowerCase()
+          member.id !== id &&
+          (member.name.toLowerCase() === nextName.toLowerCase() ||
+            samePerson(member.name, nextName))
       )
     ) {
       throw new Error("That name is already on the team");
@@ -741,21 +777,23 @@ export function patchMember(id: string, patch: MemberPatch): Promise<Member> {
     await writeMembersFile(members);
 
     if (next.name !== current.name) {
+      const matchesPrevious = (value: string | null) =>
+        Boolean(value && (value === current.name || samePerson(value, current.name)));
       const leads = await readLeadsFile();
       let leadsChanged = false;
       for (let i = 0; i < leads.length; i++) {
         const lead = leads[i];
         let changed = false;
         const updated = { ...lead };
-        if (lead.assignedTo === current.name) {
+        if (matchesPrevious(lead.assignedTo)) {
           updated.assignedTo = next.name;
           changed = true;
         }
-        if (lead.receivedBy === current.name) {
+        if (matchesPrevious(lead.receivedBy)) {
           updated.receivedBy = next.name;
           changed = true;
         }
-        if (lead.updatedBy === current.name) {
+        if (matchesPrevious(lead.updatedBy)) {
           updated.updatedBy = next.name;
           changed = true;
         }
@@ -772,11 +810,11 @@ export function patchMember(id: string, patch: MemberPatch): Promise<Member> {
         const guest = guests[i];
         let changed = false;
         const updated = { ...guest };
-        if (guest.assignedTo === current.name) {
+        if (matchesPrevious(guest.assignedTo)) {
           updated.assignedTo = next.name;
           changed = true;
         }
-        if (guest.updatedBy === current.name) {
+        if (matchesPrevious(guest.updatedBy)) {
           updated.updatedBy = next.name;
           changed = true;
         }
@@ -808,7 +846,7 @@ export function deleteMember(
     const nextMembers = members.filter((member) => member.id !== id);
     await writeMembersFile(nextMembers);
 
-    const allowed = new Set(nextMembers.map((member) => member.name));
+    const allowed = nextMembers.map((member) => member.name);
     const leads = clearMissingLeadAssignees(await readLeadsFile(), allowed);
     const guests = clearMissingGuestAssignees(await readGuestsFile(), allowed);
     await writeLeadsFile(leads);
@@ -818,17 +856,40 @@ export function deleteMember(
   });
 }
 
-function clearMissingLeadAssignees(leads: Lead[], allowed: Set<string>): Lead[] {
+function canonicalizeStoredAssignee(
+  value: string | null,
+  allowedNames: string[]
+): string | null {
+  if (!value) return null;
+  if (isKhaledAlias(value)) return KHALED_CANONICAL;
+  const resolved = resolveAssignee(value, allowedNames);
+  // Keep non-roster labels on poll reads. Clearing is deleteMember's job —
+  // otherwise getBoard rewrites the live file and looks like a rollback.
+  return resolved ?? value;
+}
+
+function personAllowed(name: string | null, allowed: string[]): boolean {
+  if (!name) return false;
+  return allowed.some((item) => item === name || samePerson(item, name));
+}
+
+function clearMissingLeadAssignees(leads: Lead[], allowed: string[]): Lead[] {
   return leads.map((lead) => ({
     ...lead,
-    assignedTo: lead.assignedTo && allowed.has(lead.assignedTo) ? lead.assignedTo : null,
-    receivedBy: lead.receivedBy && allowed.has(lead.receivedBy) ? lead.receivedBy : null,
+    assignedTo: personAllowed(lead.assignedTo, allowed)
+      ? resolveAssignee(lead.assignedTo, allowed)
+      : null,
+    receivedBy: personAllowed(lead.receivedBy, allowed)
+      ? resolveAssignee(lead.receivedBy, allowed)
+      : null,
   }));
 }
 
-function clearMissingGuestAssignees(guests: Guest[], allowed: Set<string>): Guest[] {
+function clearMissingGuestAssignees(guests: Guest[], allowed: string[]): Guest[] {
   return guests.map((guest) => ({
     ...guest,
-    assignedTo: guest.assignedTo && allowed.has(guest.assignedTo) ? guest.assignedTo : null,
+    assignedTo: personAllowed(guest.assignedTo, allowed)
+      ? resolveAssignee(guest.assignedTo, allowed)
+      : null,
   }));
 }

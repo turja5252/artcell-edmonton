@@ -15,6 +15,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import type { Guest, Lead, Member } from "@/lib/types";
+import { samePerson } from "@/lib/team-admin";
 
 type Props = {
   members: Member[];
@@ -52,11 +53,11 @@ export function TeamBoard({
 
   const rows = members
     .map((member) => {
-      const mine = leads.filter((lead) => lead.assignedTo === member.name);
-      const invites = guests.filter((guest) => guest.assignedTo === member.name);
+      const mine = leads.filter((lead) => samePerson(lead.assignedTo, member.name));
+      const invites = guests.filter((guest) => samePerson(guest.assignedTo, member.name));
       const done = mine.filter((lead) => lead.done).length;
       const received = leads
-        .filter((lead) => lead.receivedBy === member.name)
+        .filter((lead) => samePerson(lead.receivedBy, member.name))
         .reduce((sum, lead) => sum + lead.received, 0);
       return {
         member,
