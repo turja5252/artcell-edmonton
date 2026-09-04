@@ -1,8 +1,13 @@
-import { createHash, randomBytes } from "crypto";
-import { promises as fs } from "fs";
 import path from "path";
 
 import type { LeadAttachment } from "@/lib/types";
+import {
+  deleteBinaryFile,
+  deletePrefix,
+  readBinaryFile,
+  writeBinaryFile,
+} from "@/lib/persist";
+import { createHash, randomBytes } from "crypto";
 
 export const MAX_ATTACHMENT_BYTES = 12 * 1024 * 1024;
 
@@ -28,18 +33,6 @@ const EXT_MIME: Record<string, string> = {
   ".pdf": "application/pdf",
 };
 
-export function uploadsRoot(): string {
-  return path.join(process.cwd(), "data", "uploads", "leads");
-}
-
-export function leadUploadDir(leadId: string): string {
-  return path.join(uploadsRoot(), sanitizeId(leadId));
-}
-
-export function attachmentPath(leadId: string, attachmentId: string, fileName: string): string {
-  return path.join(leadUploadDir(leadId), `${sanitizeId(attachmentId)}${extOf(fileName)}`);
-}
-
 function sanitizeId(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]/g, "_");
 }
@@ -47,6 +40,18 @@ function sanitizeId(value: string): string {
 function extOf(fileName: string): string {
   const ext = path.extname(fileName).toLowerCase();
   return EXT_MIME[ext] ? ext : "";
+}
+
+export function attachmentRelativePath(
+  leadId: string,
+  attachmentId: string,
+  fileName: string
+): string {
+  return path.posix.join(
+    "uploads/leads",
+    sanitizeId(leadId),
+    `${sanitizeId(attachmentId)}${extOf(fileName)}`
+  );
 }
 
 export function isPhotoMime(mimeType: string): boolean {
@@ -82,37 +87,43 @@ export function safeDownloadName(fileName: string): string {
   return fileName.replace(/[\\/:*?"<>|]+/g, "_").trim() || "file";
 }
 
-export async function ensureLeadUploadDir(leadId: string) {
-  await fs.mkdir(leadUploadDir(leadId), { recursive: true });
+export async function ensureLeadUploadDir(_leadId: string) {
+  // no-op: directories are created on write for both local and blob stores
 }
 
 export async function removeLeadUploadDir(leadId: string) {
-  await fs.rm(leadUploadDir(leadId), { recursive: true, force: true });
+  await deletePrefix(`uploads/leads/${sanitizeId(leadId)}`);
 }
 
 export async function writeAttachmentFile(
   leadId: string,
   attachmentId: string,
   fileName: string,
-  bytes: Buffer
+  bytes: Buffer,
+  mimeType?: string
 ) {
-  await ensureLeadUploadDir(leadId);
-  const target = attachmentPath(leadId, attachmentId, fileName);
-  await fs.writeFile(target, bytes);
-  return target;
+  const relative = attachmentRelativePath(leadId, attachmentId, fileName);
+  await writeBinaryFile(
+    relative,
+    bytes,
+    mimeType || resolveMimeType(fileName, "") || "application/octet-stream"
+  );
+  return relative;
 }
 
 export async function readAttachmentFile(
   leadId: string,
   attachment: LeadAttachment
 ): Promise<Buffer> {
-  const target = attachmentPath(leadId, attachment.id, attachment.fileName);
-  return fs.readFile(target);
+  return readBinaryFile(
+    attachmentRelativePath(leadId, attachment.id, attachment.fileName)
+  );
 }
 
 export async function deleteAttachmentFile(leadId: string, attachment: LeadAttachment) {
-  const target = attachmentPath(leadId, attachment.id, attachment.fileName);
-  await fs.rm(target, { force: true });
+  await deleteBinaryFile(
+    attachmentRelativePath(leadId, attachment.id, attachment.fileName)
+  );
 }
 
 export function contentHash(bytes: Buffer): string {

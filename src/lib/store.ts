@@ -1,6 +1,3 @@
-import { promises as fs } from "fs";
-import path from "path";
-
 import { uniqueId } from "@/lib/ids";
 import { parseCount, parseMoney } from "@/lib/money";
 import type {
@@ -22,11 +19,12 @@ import {
   safeDownloadName,
   writeAttachmentFile,
 } from "@/lib/attachments";
+import { readJsonFile, writeJsonFile } from "@/lib/persist";
 
-const LEADS_PATH = path.join(process.cwd(), "data", "leads.json");
-const GUESTS_PATH = path.join(process.cwd(), "data", "guests.json");
-const MEMBERS_PATH = path.join(process.cwd(), "data", "members.json");
-const SETTINGS_PATH = path.join(process.cwd(), "data", "settings.json");
+const LEADS_FILE = "leads.json";
+const GUESTS_FILE = "guests.json";
+const MEMBERS_FILE = "members.json";
+const SETTINGS_FILE = "settings.json";
 
 const DEFAULT_SETTINGS: Settings = {
   moneyTarget: 0,
@@ -127,27 +125,21 @@ function normalizeGuest(
 }
 
 async function readLeadsFile(): Promise<Lead[]> {
-  const raw = await fs.readFile(LEADS_PATH, "utf8");
-  const parsed = JSON.parse(raw) as Lead[];
+  const parsed = await readJsonFile<Lead[]>(LEADS_FILE, []);
   return parsed.map((lead) => normalizeLead(lead));
 }
 
 async function writeLeadsFile(leads: Lead[]) {
-  await fs.writeFile(LEADS_PATH, `${JSON.stringify(leads, null, 2)}\n`, "utf8");
+  await writeJsonFile(LEADS_FILE, leads);
 }
 
 async function readGuestsFile(): Promise<Guest[]> {
-  try {
-    const raw = await fs.readFile(GUESTS_PATH, "utf8");
-    const parsed = JSON.parse(raw) as Guest[];
-    return parsed.map((guest) => normalizeGuest(guest));
-  } catch {
-    return [];
-  }
+  const parsed = await readJsonFile<Guest[]>(GUESTS_FILE, []);
+  return parsed.map((guest) => normalizeGuest(guest));
 }
 
 async function writeGuestsFile(guests: Guest[]) {
-  await fs.writeFile(GUESTS_PATH, `${JSON.stringify(guests, null, 2)}\n`, "utf8");
+  await writeJsonFile(GUESTS_FILE, guests);
 }
 
 function normalizeMember(member: Partial<Member> & { name: string; id: string }): Member {
@@ -160,47 +152,32 @@ function normalizeMember(member: Partial<Member> & { name: string; id: string })
 }
 
 async function readMembersFile(): Promise<Member[]> {
-  try {
-    const raw = await fs.readFile(MEMBERS_PATH, "utf8");
-    const parsed = JSON.parse(raw) as Member[];
-    return parsed
-      .map((member) => normalizeMember(member))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  } catch {
-    return [];
-  }
+  const parsed = await readJsonFile<Member[]>(MEMBERS_FILE, []);
+  return parsed
+    .map((member) => normalizeMember(member))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 async function writeMembersFile(members: Member[]) {
-  await fs.writeFile(
-    MEMBERS_PATH,
-    `${JSON.stringify(
-      [...members].sort((a, b) => a.name.localeCompare(b.name)),
-      null,
-      2
-    )}\n`,
-    "utf8"
+  await writeJsonFile(
+    MEMBERS_FILE,
+    [...members].sort((a, b) => a.name.localeCompare(b.name))
   );
 }
 
 async function readSettingsFile(): Promise<Settings> {
-  try {
-    const raw = await fs.readFile(SETTINGS_PATH, "utf8");
-    const parsed = JSON.parse(raw) as Partial<Settings>;
-    return {
-      moneyTarget: parseMoney(parsed.moneyTarget),
-      attendanceTarget: parseCount(parsed.attendanceTarget),
-      ticketsSold: parseCount(parsed.ticketsSold),
-      ticketsSoldUpdatedAt: parsed.ticketsSoldUpdatedAt ?? null,
-      ticketsSoldUpdatedBy: parsed.ticketsSoldUpdatedBy?.trim() || null,
-    };
-  } catch {
-    return { ...DEFAULT_SETTINGS };
-  }
+  const parsed = await readJsonFile<Partial<Settings>>(SETTINGS_FILE, DEFAULT_SETTINGS);
+  return {
+    moneyTarget: parseMoney(parsed.moneyTarget),
+    attendanceTarget: parseCount(parsed.attendanceTarget),
+    ticketsSold: parseCount(parsed.ticketsSold),
+    ticketsSoldUpdatedAt: parsed.ticketsSoldUpdatedAt ?? null,
+    ticketsSoldUpdatedBy: parsed.ticketsSoldUpdatedBy?.trim() || null,
+  };
 }
 
 async function writeSettingsFile(settings: Settings) {
-  await fs.writeFile(SETTINGS_PATH, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
+  await writeJsonFile(SETTINGS_FILE, settings);
 }
 
 export function listLeads(): Promise<Lead[]> {

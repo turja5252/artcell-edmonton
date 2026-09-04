@@ -13,17 +13,36 @@ GitHub: [turja5252/artcell-edmonton](https://github.com/turja5252/artcell-edmont
 
 Anyone with the link can tap. No login.
 
-## Deploy to Vercel (public phone link)
+## Permanent hosting (Vercel)
 
-1. Push this repo to GitHub (if it isn’t already).
-2. Open [vercel.com/new](https://vercel.com/new)
-3. Import **turja5252/artcell-edmonton**
+This is the lasting public phone URL for the team.
+
+### 1. Put the code on GitHub
+
+Repo: [turja5252/artcell-edmonton](https://github.com/turja5252/artcell-edmonton)
+
+Push `main` there (from your machine, or give the agent a GitHub token with repo write).
+
+### 2. Deploy on Vercel
+
+1. Open [vercel.com/new](https://vercel.com/new)
+2. Import **turja5252/artcell-edmonton**
+3. Framework: **Next.js** (auto)
 4. Click **Deploy**
-5. Share the `*.vercel.app` URL in the group chat
 
-Framework preset: Next.js. Build command: `npm run build`. Output: default.
+### 3. Add durable storage (required for permanent data)
 
-**Note:** On Vercel’s free plan, file writes can reset when the server sleeps. For a lasting shared board, add a free Turso/Neon database after the first deploy.
+Without this, ticket counts / call updates / files can reset on Vercel.
+
+1. In the Vercel project → **Storage** → create a **Blob** store
+2. Connect it to this project (adds `BLOB_READ_WRITE_TOKEN`)
+3. Redeploy
+
+When `BLOB_READ_WRITE_TOKEN` is set, board data and sponsor files are stored in Vercel Blob and survive deploys.
+
+### 4. Share the link
+
+Use the `*.vercel.app` URL (or your custom domain) in the group chat.
 
 ## Run locally
 
@@ -33,3 +52,10 @@ npm run dev
 ```
 
 Open [http://localhost:43217](http://localhost:43217).
+
+Optional for local blob testing:
+
+```bash
+cp .env.example .env.local
+# set BLOB_READ_WRITE_TOKEN=...
+```
