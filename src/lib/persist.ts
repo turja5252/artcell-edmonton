@@ -6,7 +6,11 @@ import { del, get, list, put } from "@vercel/blob";
 const PREFIX = "artcell";
 
 export function useBlobStore(): boolean {
-  return Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim());
+  return Boolean(
+    process.env.BLOB_READ_WRITE_TOKEN?.trim() ||
+      process.env.BLOB_STORE_ID?.trim() ||
+      process.env.VERCEL_OIDC_TOKEN?.trim()
+  );
 }
 
 function assertWritableStore(action: string) {
