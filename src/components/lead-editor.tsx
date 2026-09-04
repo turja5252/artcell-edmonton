@@ -164,7 +164,7 @@ function LeadEditorForm({
             {company || lead.company}
           </SheetTitle>
           <SheetDescription>
-            Tap chips to update now, or edit and Save. Mark done when the call is finished — that is not the same as declined.
+            Tap chips to update now, or edit and Save. Mark completed when there is nothing left to do — that is not the same as declined.
           </SheetDescription>
         </SheetHeader>
 
@@ -402,7 +402,7 @@ function LeadEditorForm({
             disabled={busy || deleting}
             onClick={() => persist({ done: !done })}
           >
-            {done ? "Mark still open" : "Mark done"}
+            {done ? "Reopen" : "Mark completed"}
           </Button>
           {onDelete ? (
             confirmDelete ? (
