@@ -19,24 +19,37 @@ export async function PATCH(
     const message = error instanceof Error ? error.message : "Failed to update";
     const status = message.includes("not found")
       ? 404
-      : message.includes("already")
-        ? 400
+      : message.includes("already") || message.includes("Only Tanzim")
+        ? message.includes("Only Tanzim")
+          ? 403
+          : 400
         : 500;
     return NextResponse.json({ error: message }, { status });
   }
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await context.params;
-    const result = await deleteMember(id);
+    let actor: string | null = null;
+    try {
+      const body = (await request.json()) as { actor?: string | null };
+      actor = body.actor ?? null;
+    } catch {
+      actor = null;
+    }
+    const result = await deleteMember(id, actor);
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to remove";
-    const status = message.includes("not found") ? 404 : 500;
+    const status = message.includes("not found")
+      ? 404
+      : message.includes("Only Tanzim")
+        ? 403
+        : 500;
     return NextResponse.json({ error: message }, { status });
   }
 }

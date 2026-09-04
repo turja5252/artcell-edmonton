@@ -47,13 +47,13 @@
     "company": "Desjardin",
     "assignedTo": "Nick",
     "done": false,
-    "outcome": "",
+    "outcome": "Can't reach",
     "committed": 0,
     "received": 0,
-    "receivedBy": null,
+    "receivedBy": "Nick",
     "attachments": [],
-    "updatedAt": null,
-    "updatedBy": null
+    "updatedAt": "2026-09-04T21:18:48.496Z",
+    "updatedBy": "Nick"
   },
   {
     "id": "bishwajit-barua",
@@ -208,7 +208,7 @@
     "received": 0,
     "receivedBy": "Tanzim",
     "attachments": [],
-    "updatedAt": "2026-09-04T18:38:26.788Z",
+    "updatedAt": "2026-09-04T21:13:35.008Z",
     "updatedBy": "Tanzim"
   },
   {
@@ -227,33 +227,33 @@
   {
     "id": "canadian-butcher",
     "company": "Canadian Butcher",
-    "assignedTo": "Khaled Bhai",
+    "assignedTo": "Khaled",
     "done": false,
     "outcome": "Waiting for reply",
     "committed": 0,
     "received": 0,
-    "receivedBy": "Khaled Bhai",
+    "receivedBy": "Khaled Bari",
     "attachments": [],
-    "updatedAt": "2026-09-04T17:50:47.897Z",
-    "updatedBy": "Khaled Bhai"
+    "updatedAt": "2026-09-04T21:25:05.325Z",
+    "updatedBy": "Khaled Bari"
   },
   {
     "id": "svf",
     "company": "SVF",
-    "assignedTo": "Khaled Bhai",
+    "assignedTo": "Khaled Bari",
     "done": true,
     "outcome": "Declined. ",
     "committed": 0,
     "received": 0,
-    "receivedBy": "Khaled Bhai",
+    "receivedBy": "Khaled Bari",
     "attachments": [],
     "updatedAt": "2026-09-04T18:51:59.368Z",
-    "updatedBy": "Khaled Bhai"
+    "updatedBy": "Khaled Bari"
   },
   {
     "id": "top-donair",
     "company": "Top Donair",
-    "assignedTo": "Khaled Bhai",
+    "assignedTo": "Khaled Bari",
     "done": false,
     "outcome": "",
     "committed": 0,
@@ -266,20 +266,20 @@
   {
     "id": "realtor-duke-bhai",
     "company": "Realtor Duke Bhai",
-    "assignedTo": "Khaled Bhai",
+    "assignedTo": "Khaled Bari",
     "done": false,
     "outcome": "Waiting for reply.His dad is sick ,.",
     "committed": 0,
     "received": 0,
-    "receivedBy": "Khaled Bhai",
+    "receivedBy": "Khaled Bari",
     "attachments": [],
     "updatedAt": "2026-09-04T18:50:52.848Z",
-    "updatedBy": "Khaled Bhai"
+    "updatedBy": "Khaled Bari"
   },
   {
     "id": "physio",
     "company": "Physio",
-    "assignedTo": "Khaled Bhai",
+    "assignedTo": "Khaled Bari",
     "done": false,
     "outcome": "",
     "committed": 0,
@@ -418,5 +418,18 @@
     "attachments": [],
     "updatedAt": null,
     "updatedBy": null
+  },
+  {
+    "id": "meherul-rajib",
+    "company": "Meherul Rajib Swadeshi immigration",
+    "assignedTo": "Khaled Bari",
+    "done": false,
+    "outcome": "",
+    "committed": 500,
+    "received": 0,
+    "receivedBy": "Khaled Bari",
+    "attachments": [],
+    "updatedAt": "2026-09-04T21:26:48.640Z",
+    "updatedBy": "Khaled Bari"
   }
 ]

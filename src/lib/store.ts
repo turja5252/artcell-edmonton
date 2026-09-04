@@ -20,6 +20,7 @@ import {
   writeAttachmentFile,
 } from "@/lib/attachments";
 import { readJsonFile, writeJsonFile } from "@/lib/persist";
+import { isTeamAdmin } from "@/lib/team-admin";
 
 const LEADS_FILE = "leads.json";
 const GUESTS_FILE = "guests.json";
@@ -626,8 +627,12 @@ export function createMember(input: {
   name: string;
   phone?: string;
   email?: string;
+  actor?: string | null;
 }): Promise<Member> {
   return enqueue(async () => {
+    if (!isTeamAdmin(input.actor)) {
+      throw new Error("Only Tanzim can add teammates");
+    }
     const name = input.name.trim();
     if (!name) throw new Error("Name is required");
     const members = await readMembersFile();
@@ -652,6 +657,9 @@ export function createMember(input: {
 
 export function patchMember(id: string, patch: MemberPatch): Promise<Member> {
   return enqueue(async () => {
+    if (!isTeamAdmin(patch.actor)) {
+      throw new Error("Only Tanzim can edit teammates");
+    }
     const members = await readMembersFile();
     const index = members.findIndex((member) => member.id === id);
     if (index === -1) throw new Error("Member not found");
@@ -726,12 +734,18 @@ export function patchMember(id: string, patch: MemberPatch): Promise<Member> {
   });
 }
 
-export function deleteMember(id: string): Promise<{
+export function deleteMember(
+  id: string,
+  actor?: string | null
+): Promise<{
   members: Member[];
   leads: Lead[];
   guests: Guest[];
 }> {
   return enqueue(async () => {
+    if (!isTeamAdmin(actor)) {
+      throw new Error("Only Tanzim can remove teammates");
+    }
     const members = await readMembersFile();
     const target = members.find((member) => member.id === id);
     if (!target) throw new Error("Member not found");

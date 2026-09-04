@@ -40,6 +40,7 @@ import { formatMoney } from "@/lib/money";
 import { formatTime } from "@/lib/people";
 import type { Guest, GuestStatus, Lead, Member, Settings } from "@/lib/types";
 import { displayGuestName } from "@/lib/types";
+import { isTeamAdmin } from "@/lib/team-admin";
 import { cn } from "@/lib/utils";
 
 const ME_KEY = "artcell-edmonton-me";
@@ -163,38 +164,12 @@ export function ConcertApp({
     setFilter("mine");
   }
 
-  async function ensureMember(name: string) {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    if (members.some((member) => member.name.toLowerCase() === trimmed.toLowerCase())) {
-      return;
-    }
-    const response = await fetch("/api/members", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: trimmed }),
-    });
-    const data = (await response.json()) as { member?: Member; error?: string };
-    if (!response.ok) throw new Error(data.error || "Could not add member");
-    if (data.member) {
-      setMembers((current) => {
-        if (current.some((member) => member.id === data.member!.id)) return current;
-        return [...current, data.member!].sort((a, b) => a.name.localeCompare(b.name));
-      });
-    }
-  }
-
-  async function pickMeAndJoin(name: string) {
-    await ensureMember(name);
-    pickMe(name);
-    setToast(`${name} is on the team`);
-  }
-
   async function addMember(input: { name: string; phone?: string; email?: string }) {
+    if (!isTeamAdmin(me)) throw new Error("Only Tanzim can add teammates");
     const response = await fetch("/api/members", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
+      body: JSON.stringify({ ...input, actor: me }),
     });
     const data = (await response.json()) as { member?: Member; error?: string };
     if (!response.ok) throw new Error(data.error || "Could not add member");
@@ -208,8 +183,13 @@ export function ConcertApp({
   }
 
   async function removeMember(id: string) {
+    if (!isTeamAdmin(me)) throw new Error("Only Tanzim can remove teammates");
     const removed = members.find((member) => member.id === id);
-    const response = await fetch(`/api/members/${id}`, { method: "DELETE" });
+    const response = await fetch(`/api/members/${id}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ actor: me }),
+    });
     const data = (await response.json()) as {
       members?: Member[];
       leads?: Lead[];
@@ -229,11 +209,12 @@ export function ConcertApp({
     id: string,
     input: { name: string; phone?: string; email?: string }
   ) {
+    if (!isTeamAdmin(me)) throw new Error("Only Tanzim can edit teammates");
     const previous = members.find((member) => member.id === id);
     const response = await fetch(`/api/members/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
+      body: JSON.stringify({ ...input, actor: me }),
     });
     const data = (await response.json()) as { member?: Member; error?: string };
     if (!response.ok) throw new Error(data.error || "Could not save member");
@@ -720,6 +701,7 @@ export function ConcertApp({
             members={members}
             leads={leads}
             guests={guests}
+            canManage={isTeamAdmin(me)}
             onFilterPerson={(name) => {
               if (name) {
                 writeMe(name);
@@ -799,7 +781,6 @@ export function ConcertApp({
         people={people}
         current={me}
         onPick={pickMe}
-        onAddAndPick={pickMeAndJoin}
         onOpenChange={setWhoOpen}
       />
       <AddLead

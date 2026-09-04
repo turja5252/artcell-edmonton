@@ -20,6 +20,7 @@ type Props = {
   members: Member[];
   leads: Lead[];
   guests: Guest[];
+  canManage: boolean;
   onFilterPerson: (name: string) => void;
   onAdd: (input: { name: string; phone?: string; email?: string }) => Promise<void>;
   onSave: (
@@ -33,6 +34,7 @@ export function TeamBoard({
   members,
   leads,
   guests,
+  canManage,
   onFilterPerson,
   onAdd,
   onSave,
@@ -91,19 +93,23 @@ export function TeamBoard({
     <div className="space-y-3 pb-24">
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          Add organizers here. Tap Edit on anyone to change name, phone, or email.
+          {canManage
+            ? "Add organizers here. Tap Edit on anyone to change name, phone, or email."
+            : "Team roster. Only Tanzim can add or edit teammates — pick your name under “Updating as”."}
         </p>
-        <Button
-          type="button"
-          className="h-11 shrink-0"
-          onClick={() => setAdding((value) => !value)}
-        >
-          <Plus className="size-4" />
-          Add
-        </Button>
+        {canManage ? (
+          <Button
+            type="button"
+            className="h-11 shrink-0"
+            onClick={() => setAdding((value) => !value)}
+          >
+            <Plus className="size-4" />
+            Add
+          </Button>
+        ) : null}
       </div>
 
-      {adding ? (
+      {canManage && adding ? (
         <form
           className="space-y-2 rounded-2xl border border-border/80 bg-card/80 p-3"
           onSubmit={(event) => {
@@ -172,7 +178,9 @@ export function TeamBoard({
                   <div className="flex items-start justify-between gap-3">
                     <button
                       type="button"
-                      onClick={() => setEditing(row.member)}
+                      onClick={() =>
+                        canManage ? setEditing(row.member) : onFilterPerson(row.member.name)
+                      }
                       className="min-w-0 flex-1 text-left"
                     >
                       <PersonChip name={row.member.name} />
@@ -207,26 +215,30 @@ export function TeamBoard({
                       </div>
                     </button>
                     <div className="flex shrink-0 flex-col gap-1">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="size-10 text-muted-foreground"
-                        aria-label={`Edit ${row.member.name}`}
-                        onClick={() => setEditing(row.member)}
-                      >
-                        <Pencil className="size-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="size-10 text-muted-foreground"
-                        aria-label={`Remove ${row.member.name}`}
-                        onClick={() => void onRemove(row.member.id)}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
+                      {canManage ? (
+                        <>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="size-10 text-muted-foreground"
+                            aria-label={`Edit ${row.member.name}`}
+                            onClick={() => setEditing(row.member)}
+                          >
+                            <Pencil className="size-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="size-10 text-muted-foreground"
+                            aria-label={`Remove ${row.member.name}`}
+                            onClick={() => void onRemove(row.member.id)}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -238,7 +250,7 @@ export function TeamBoard({
 
       <MemberEditor
         member={editing}
-        open={Boolean(editing)}
+        open={Boolean(editing) && canManage}
         onOpenChange={(open) => {
           if (!open) setEditing(null);
         }}

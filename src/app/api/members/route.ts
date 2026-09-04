@@ -21,16 +21,22 @@ export async function POST(request: Request) {
       name?: string;
       phone?: string;
       email?: string;
+      actor?: string | null;
     };
     const member = await createMember({
       name: body.name ?? "",
       phone: body.phone,
       email: body.email,
+      actor: body.actor,
     });
     return NextResponse.json({ member }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to add member";
-    const status = message.includes("required") ? 400 : 500;
+    const status = message.includes("required")
+      ? 400
+      : message.includes("Only Tanzim")
+        ? 403
+        : 500;
     return NextResponse.json({ error: message }, { status });
   }
 }
