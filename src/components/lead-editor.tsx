@@ -24,6 +24,7 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (id: string, patch: Partial<Lead> & { actor?: string }) => Promise<void>;
+  onDelete?: (id: string) => Promise<void>;
   busy?: boolean;
 };
 
@@ -34,6 +35,7 @@ export function LeadEditor({
   open,
   onOpenChange,
   onSave,
+  onDelete,
   busy,
 }: Props) {
   if (!lead) return null;
@@ -47,6 +49,7 @@ export function LeadEditor({
       open={open}
       onOpenChange={onOpenChange}
       onSave={onSave}
+      onDelete={onDelete}
       busy={busy}
     />
   );
@@ -59,6 +62,7 @@ function LeadEditorForm({
   open,
   onOpenChange,
   onSave,
+  onDelete,
   busy,
 }: Props & { lead: Lead }) {
   const [company, setCompany] = useState(lead.company);
@@ -68,6 +72,8 @@ function LeadEditorForm({
   const [committed, setCommitted] = useState(lead.committed ? String(lead.committed) : "");
   const [received, setReceived] = useState(lead.received ? String(lead.received) : "");
   const [receivedBy, setReceivedBy] = useState(lead.receivedBy ?? me ?? "");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const leadId = lead.id;
 
   async function persist(next: {
@@ -295,11 +301,53 @@ function LeadEditorForm({
             type="button"
             className="h-14 w-full text-base"
             variant={done ? "outline" : "default"}
-            disabled={busy}
+            disabled={busy || deleting}
             onClick={() => persist({ done: !done })}
           >
             {done ? "Mark still open" : "Mark done"}
           </Button>
+          {onDelete ? (
+            confirmDelete ? (
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-12"
+                  disabled={deleting}
+                  onClick={() => setConfirmDelete(false)}
+                >
+                  Keep it
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  className="h-12"
+                  disabled={deleting}
+                  onClick={() => {
+                    setDeleting(true);
+                    void onDelete(leadId)
+                      .then(() => onOpenChange(false))
+                      .finally(() => {
+                        setDeleting(false);
+                        setConfirmDelete(false);
+                      });
+                  }}
+                >
+                  {deleting ? "Deleting…" : "Yes, delete"}
+                </Button>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-12 w-full text-destructive"
+                disabled={busy || deleting}
+                onClick={() => setConfirmDelete(true)}
+              >
+                Delete this entry
+              </Button>
+            )
+          ) : null}
         </SheetFooter>
       </SheetContent>
     </Sheet>

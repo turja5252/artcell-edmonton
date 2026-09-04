@@ -62,13 +62,13 @@
   {
     "id": "chandu-talukdar-cn-tax",
     "company": "Chandu Talukdar - CN Tax",
-    "assignedTo": "Tanzim",
-    "done": true,
+    "assignedTo": "Anam",
+    "done": false,
     "outcome": "Waiting for reply",
     "committed": 0,
     "received": 0,
-    "receivedBy": null,
-    "updatedAt": "2026-09-04T17:15:26.342Z",
+    "receivedBy": "Nick",
+    "updatedAt": "2026-09-04T17:46:18.041Z",
     "updatedBy": "Tanzim"
   },
   {
@@ -122,26 +122,26 @@
   {
     "id": "raiyans-company",
     "company": "Raiyan's Company",
-    "assignedTo": "Wade Engineering",
+    "assignedTo": "Raiyan",
     "done": false,
     "outcome": "",
     "committed": 0,
     "received": 0,
-    "receivedBy": null,
-    "updatedAt": null,
-    "updatedBy": null
+    "receivedBy": "Tanzim",
+    "updatedAt": "2026-09-04T18:37:53.187Z",
+    "updatedBy": "Tanzim"
   },
   {
     "id": "kumon-and-abacus",
     "company": "Kumon and Abacus",
-    "assignedTo": "Mrs Mizanur Shoma Apa",
+    "assignedTo": "Sathi",
     "done": false,
     "outcome": "",
     "committed": 0,
     "received": 0,
-    "receivedBy": null,
-    "updatedAt": null,
-    "updatedBy": null
+    "receivedBy": "Tanzim",
+    "updatedAt": "2026-09-04T18:39:00.766Z",
+    "updatedBy": "Tanzim"
   },
   {
     "id": "tk-auto",
@@ -169,27 +169,27 @@
   },
   {
     "id": "saem-daily-bazaar",
-    "company": "Saem Daily Bazaar",
+    "company": "Saem  Chowdhury Daily Bazaar",
     "assignedTo": "Tanzim",
-    "done": false,
+    "done": true,
     "outcome": "",
-    "committed": 0,
+    "committed": 200,
     "received": 0,
-    "receivedBy": null,
-    "updatedAt": null,
-    "updatedBy": null
+    "receivedBy": "Tanzim",
+    "updatedAt": "2026-09-04T18:38:37.640Z",
+    "updatedBy": "Tanzim"
   },
   {
     "id": "mohsin-realton",
-    "company": "Mohsin Realton",
+    "company": "Mohsin Alam Realtor",
     "assignedTo": "Tanzim",
-    "done": false,
+    "done": true,
     "outcome": "",
-    "committed": 0,
+    "committed": 300,
     "received": 0,
-    "receivedBy": null,
-    "updatedAt": null,
-    "updatedBy": null
+    "receivedBy": "Tanzim",
+    "updatedAt": "2026-09-04T18:38:26.788Z",
+    "updatedBy": "Tanzim"
   },
   {
     "id": "iron-site",
@@ -208,24 +208,24 @@
     "company": "Canadian Butcher",
     "assignedTo": "Khaled Bhai",
     "done": false,
-    "outcome": "",
+    "outcome": "Waiting for reply",
     "committed": 0,
     "received": 0,
-    "receivedBy": null,
-    "updatedAt": null,
-    "updatedBy": null
+    "receivedBy": "Khaled Bhai",
+    "updatedAt": "2026-09-04T17:50:47.897Z",
+    "updatedBy": "Khaled Bhai"
   },
   {
     "id": "svf",
     "company": "SVF",
     "assignedTo": "Khaled Bhai",
-    "done": false,
-    "outcome": "",
+    "done": true,
+    "outcome": "Declined. ",
     "committed": 0,
     "received": 0,
-    "receivedBy": null,
-    "updatedAt": null,
-    "updatedBy": null
+    "receivedBy": "Khaled Bhai",
+    "updatedAt": "2026-09-04T18:51:59.368Z",
+    "updatedBy": "Khaled Bhai"
   },
   {
     "id": "top-donair",
@@ -243,12 +243,12 @@
     "id": "realtor-duke-bhai",
     "company": "Realtor Duke Bhai",
     "assignedTo": "Khaled Bhai",
-    "done": true,
-    "outcome": "",
+    "done": false,
+    "outcome": "Waiting for reply.His dad is sick ,.",
     "committed": 0,
     "received": 0,
-    "receivedBy": null,
-    "updatedAt": "2026-09-04T17:21:44.142Z",
+    "receivedBy": "Khaled Bhai",
+    "updatedAt": "2026-09-04T18:50:52.848Z",
     "updatedBy": "Khaled Bhai"
   },
   {
@@ -337,15 +337,15 @@
   },
   {
     "id": "donair-poutine",
-    "company": "Donair & Poutine",
+    "company": "Donair & Poutine House",
     "assignedTo": "Fahim",
     "done": false,
     "outcome": "",
     "committed": 0,
     "received": 0,
-    "receivedBy": null,
-    "updatedAt": null,
-    "updatedBy": null
+    "receivedBy": "Tanzim",
+    "updatedAt": "2026-09-04T18:41:10.142Z",
+    "updatedBy": "Tanzim"
   },
   {
     "id": "mizan-bhai",
@@ -361,15 +361,15 @@
   },
   {
     "id": "dominion-laundry",
-    "company": "Dominion Laundry",
+    "company": "Dominion Landing",
     "assignedTo": "Fahim",
     "done": false,
     "outcome": "",
     "committed": 0,
     "received": 0,
-    "receivedBy": null,
-    "updatedAt": null,
-    "updatedBy": null
+    "receivedBy": "Tanzim",
+    "updatedAt": "2026-09-04T18:40:32.568Z",
+    "updatedBy": "Tanzim"
   },
   {
     "id": "new-conl",

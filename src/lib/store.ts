@@ -262,6 +262,15 @@ export function patchLead(id: string, patch: LeadPatch): Promise<Lead> {
   });
 }
 
+export function deleteLead(id: string): Promise<void> {
+  return enqueue(async () => {
+    const leads = await readLeadsFile();
+    const next = leads.filter((lead) => lead.id !== id);
+    if (next.length === leads.length) throw new Error("Lead not found");
+    await writeLeadsFile(next);
+  });
+}
+
 export function mergeSheetRows(
   rows: { company: string; assignedTo: string | null }[],
   actor?: string | null

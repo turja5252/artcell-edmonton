@@ -272,6 +272,21 @@ export function ConcertApp({
     }
   }
 
+  async function deleteLead(id: string) {
+    const removed = leads.find((lead) => lead.id === id);
+    setLeads((current) => current.filter((lead) => lead.id !== id));
+    setActive(null);
+    try {
+      const response = await fetch(`/api/leads/${id}`, { method: "DELETE" });
+      const data = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(data.error || "Could not delete");
+      setToast(removed ? `Removed ${removed.company}` : "Entry deleted");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete");
+      await load();
+    }
+  }
+
   async function addLead(company: string, assignedTo: string | null) {
     const response = await fetch("/api/leads", {
       method: "POST",
@@ -710,6 +725,7 @@ export function ConcertApp({
           if (!open) setActive(null);
         }}
         onSave={saveLead}
+        onDelete={deleteLead}
         busy={busyId === active?.id}
       />
       <GuestEditor
