@@ -104,3 +104,36 @@
   min-height: 3rem;
   touch-action: manipulation;
 }
+
+/* Unmistakable sponsor-card glows on dark phones. Outline + multi-layer
+   shadow so the halo is not a 1px ring that blends into the card border.
+   overflow:visible so the halo is not clipped on the card itself. */
+.lead-glow-declined {
+  position: relative;
+  z-index: 1;
+  overflow: visible !important;
+  border-color: #ef4444 !important;
+  border-width: 2px;
+  outline: 3px solid #f87171;
+  outline-offset: 2px;
+  box-shadow:
+    0 0 0 3px rgba(239, 68, 68, 0.95),
+    0 0 22px 6px rgba(239, 68, 68, 0.8),
+    0 0 48px 12px rgba(220, 38, 38, 0.5) !important;
+  background-color: color-mix(in oklab, var(--card) 78%, #7f1d1d);
+}
+
+.lead-glow-money {
+  position: relative;
+  z-index: 1;
+  overflow: visible !important;
+  border-color: #34d399 !important;
+  border-width: 2px;
+  outline: 3px solid #6ee7b7;
+  outline-offset: 2px;
+  box-shadow:
+    0 0 0 3px rgba(16, 185, 129, 0.95),
+    0 0 22px 6px rgba(16, 185, 129, 0.75),
+    0 0 48px 12px rgba(5, 150, 105, 0.45) !important;
+  background-color: color-mix(in oklab, var(--card) 78%, #064e3b);
+}

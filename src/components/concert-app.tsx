@@ -51,6 +51,8 @@ import { formatTime } from "@/lib/people";
 import type { Guest, GuestStatus, Lead, Member, Settings } from "@/lib/types";
 import {
   displayGuestName,
+  DECLINED_PILL_CLASS,
+  MONEY_PILL_CLASS,
   isLeadDeclined,
   leadGlowClass,
 } from "@/lib/types";
@@ -867,9 +869,9 @@ export function ConcertApp({
               onPickMe={() => setWhoOpen(true)}
             />
           ) : (
-            <ul className="mt-4 space-y-2">
+            <ul className="mt-4 space-y-3 overflow-visible py-1">
               {visible.map((lead) => (
-                <li key={lead.id}>
+                <li key={lead.id} className="overflow-visible">
                   <LeadCard
                     lead={lead}
                     me={me}
@@ -1166,12 +1168,12 @@ function LeadCard({
   return (
     <article
       className={cn(
-        "rounded-2xl border border-border/80 bg-card/80 p-3 shadow-sm backdrop-blur-sm",
+        "overflow-visible rounded-2xl border border-border/80 bg-card/80 p-3",
         leadGlowClass(lead),
         lead.done && !declined && "opacity-75"
       )}
     >
-      <button type="button" onClick={onOpen} className="w-full text-left">
+      <button type="button" onClick={onOpen} className="w-full overflow-visible text-left">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-lg leading-tight font-semibold">{lead.company}</h2>
@@ -1181,33 +1183,23 @@ function LeadCard({
               ) : (
                 <span className="text-xs text-primary">Nobody claimed this yet</span>
               )}
-              {declined ? (
-                <span className="rounded-full bg-destructive/15 px-2 py-0.5 text-xs font-medium text-destructive">
-                  Declined
-                </span>
-              ) : null}
+              {declined ? <span className={DECLINED_PILL_CLASS}>Declined</span> : null}
               {lead.done ? (
                 <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-300">
                   Completed
                 </span>
               ) : null}
-              {lead.committed > 0 ? (
-                <span
-                  className={cn(
-                    "text-xs font-medium",
-                    declined ? "text-foreground" : "text-emerald-300"
-                  )}
-                >
+              {!declined && lead.committed > 0 ? (
+                <span className={MONEY_PILL_CLASS}>Pledged {formatMoney(lead.committed)}</span>
+              ) : lead.committed > 0 ? (
+                <span className="text-xs font-medium text-foreground">
                   Pledged {formatMoney(lead.committed)}
                 </span>
               ) : null}
-              {lead.received > 0 ? (
-                <span
-                  className={cn(
-                    "text-xs font-medium",
-                    declined ? "text-muted-foreground" : "text-emerald-300/90"
-                  )}
-                >
+              {!declined && lead.received > 0 ? (
+                <span className={MONEY_PILL_CLASS}>Received {formatMoney(lead.received)}</span>
+              ) : lead.received > 0 ? (
+                <span className="text-xs font-medium text-muted-foreground">
                   Received {formatMoney(lead.received)}
                 </span>
               ) : null}

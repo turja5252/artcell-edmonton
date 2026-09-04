@@ -2,7 +2,13 @@
 
 import { PersonChip } from "@/components/person-chip";
 import { countableMoney, formatMoney } from "@/lib/money";
-import { isLeadDeclined, leadGlowClass, type Lead } from "@/lib/types";
+import {
+  DECLINED_PILL_CLASS,
+  MONEY_PILL_CLASS,
+  isLeadDeclined,
+  leadGlowClass,
+  type Lead,
+} from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -112,20 +118,23 @@ export function MoneyBoard({ leads, members, target, onSetTarget, onOpenLead }: 
         <h2 className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
           Companies
         </h2>
-        <ul className="space-y-2">
+        <ul className="space-y-3 overflow-visible py-1">
           {ranked.map((lead) => {
             const declined = isLeadDeclined(lead);
             const money = countableMoney(lead);
+            const glow = leadGlowClass(lead);
             return (
-            <li key={lead.id}>
+            <li
+              key={lead.id}
+              className={cn(
+                "overflow-visible rounded-2xl border border-border/80 bg-card/80",
+                glow
+              )}
+            >
               <button
                 type="button"
                 onClick={() => onOpenLead(lead)}
-                className={cn(
-                  "flex w-full items-center justify-between gap-3 rounded-2xl border border-border/80 bg-card/80 p-3 text-left",
-                  // Declined red wins (including $0 rows). Pledged/received glow green.
-                  leadGlowClass(lead)
-                )}
+                className="flex w-full items-center justify-between gap-3 overflow-visible rounded-2xl bg-transparent p-3 text-left"
               >
                 <span>
                   <span className="block font-medium">{lead.company}</span>
@@ -136,18 +145,15 @@ export function MoneyBoard({ leads, members, target, onSetTarget, onOpenLead }: 
                       <span className="text-xs text-muted-foreground">Unassigned</span>
                     )}
                     {declined ? (
-                      <span className="rounded-full bg-destructive/15 px-2 py-0.5 text-xs font-medium text-destructive">
-                        Declined
-                      </span>
+                      <span className={DECLINED_PILL_CLASS}>Declined</span>
+                    ) : money.committed > 0 ? (
+                      <span className={MONEY_PILL_CLASS}>Pledged</span>
+                    ) : money.received > 0 ? (
+                      <span className={MONEY_PILL_CLASS}>Received</span>
                     ) : null}
                   </span>
                 </span>
                 <span className="text-right">
-                  {money.committed > 0 && !declined ? (
-                    <span className="mb-0.5 block text-[10px] font-medium tracking-wide text-emerald-300/90 uppercase">
-                      Pledged
-                    </span>
-                  ) : null}
                   <span
                     className={cn(
                       "font-heading block text-xl tabular-nums",

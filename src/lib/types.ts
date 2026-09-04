@@ -129,13 +129,20 @@ export const OUTCOME_CHIPS = [
   "Can't reach",
 ] as const;
 
-/** Ring + red glow for declined sponsor cards (Calls + Money). Not a full red fill. */
-export const DECLINED_GLOW_CLASS =
-  "ring-2 ring-destructive shadow-[0_0_18px_2px_rgba(239,68,68,0.42)]";
+/**
+ * Full-card glow classes (globals.css). Strong ring + halo so they read on a
+ * phone dark theme. Applied on the outer Money/Calls card, not an inner node.
+ */
+export const DECLINED_GLOW_CLASS = "lead-glow-declined";
 
-/** Ring + green glow for pledged or received money (Calls + Money). */
-export const MONEY_GLOW_CLASS =
-  "ring-2 ring-emerald-400/80 shadow-[0_0_18px_2px_rgba(16,185,129,0.45)]";
+/** Green glow for pledged or received money (Calls + Money). */
+export const MONEY_GLOW_CLASS = "lead-glow-money";
+
+export const DECLINED_PILL_CLASS =
+  "inline-flex items-center rounded-full bg-red-600 px-2.5 py-0.5 text-xs font-semibold text-white shadow-[0_0_10px_rgba(239,68,68,0.7)]";
+
+export const MONEY_PILL_CLASS =
+  "inline-flex items-center rounded-full bg-emerald-600 px-2.5 py-0.5 text-xs font-semibold text-white shadow-[0_0_10px_rgba(16,185,129,0.65)]";
 
 export function hasLeadMoney(lead: {
   committed?: number | null;
