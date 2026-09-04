@@ -1,10 +1,12 @@
-import type { Lead } from "@/lib/types";
+type Named = { assignedTo?: string | null; updatedBy?: string | null };
 
-export function uniquePeople(leads: Lead[]): string[] {
+export function uniquePeople(...lists: Named[][]): string[] {
   const names = new Set<string>();
-  for (const lead of leads) {
-    if (lead.assignedTo) names.add(lead.assignedTo);
-    if (lead.updatedBy) names.add(lead.updatedBy);
+  for (const list of lists) {
+    for (const item of list) {
+      if (item.assignedTo) names.add(item.assignedTo);
+      if (item.updatedBy) names.add(item.updatedBy);
+    }
   }
   return [...names].sort((a, b) => a.localeCompare(b));
 }

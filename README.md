@@ -1,32 +1,53 @@
 # Artcell Edmonton Show
 
-A phone-first board for the Artcell Edmonton concert team. It starts from the [outreach spreadsheet](https://docs.google.com/spreadsheets/d/1v85LqFr8duSQ-eG0rvwGZtf_v-n4SZoL3xbgDe8itsI) and lets anyone with the link claim a company, mark the call done, and leave what happened.
+Phone board and Excel workbook for the Artcell Edmonton concert team. Starts from the [sponsor search list](https://docs.google.com/spreadsheets/d/1v85LqFr8duSQ-eG0rvwGZtf_v-n4SZoL3xbgDe8itsI).
 
-## What you can do
+## Phone board
 
-- Pick your name once. Your open list is one tap away.
-- Claim unassigned contacts, mark them done, and tap a result chip (waiting, confirmed, declined, and so on).
-- Add a new company so it shows up for the whole group.
-- See who is carrying how many names on the Team tab.
-- Open setlist cues in YouTube at the exact timestamp.
+- **Calls** — claim a company, mark the call done, leave what happened.
+- **Money** — set a target, log committed and received, see grand total and remaining.
+- **Seats** — attendance outreach: who you invited, seats, confirmed / maybe / remaining.
+- **Team** and **Songs** — who is carrying what, plus setlist cues.
 
-Updates are shared on this server (saved to `data/leads.json`). Anyone with the link can edit — there is no login. Pull new rows from the Google Sheet with the refresh button; existing notes are not overwritten.
+Anyone with the link can tap. No login. The spreadsheet icon downloads the Excel file for Microsoft 365.
 
-## Run locally
+## Excel for Microsoft 365
+
+If the crew already lives in OneDrive / Teams, Excel is the simpler shared ledger:
+
+1. Download [Artcell-Edmonton-Show.xlsx](./Artcell-Edmonton-Show.xlsx) (also served at `/Artcell-Edmonton-Show.xlsx`).
+2. Upload it to OneDrive. Share → anyone with the link can edit (or your org only).
+3. Paste that link in the group chat. On a phone, open it in the Excel app.
+4. Yellow cells are for typing. Gray cells are running totals.
+
+Sheets inside the file:
+
+| Sheet | What it does |
+| --- | --- |
+| Dashboard | Target, committed, received, remaining, confirmed seats, remaining seats |
+| Sponsors | The 32 companies plus $ committed / received |
+| Attendance | Invite list with status and seat count |
+| Setlist | Cues with YouTube timestamps |
+| How to share | The same steps as above |
+
+The website and the Excel file are **not linked**. Pick one source of truth, or copy numbers across if you use both.
+
+## Run the phone board
 
 ```bash
 npm install
-npm run dev -- --port 43217
+npm run dev
 ```
 
-Open [http://localhost:43217](http://localhost:43217) on your phone (same Wi-Fi) or laptop.
+Open [http://localhost:43217](http://localhost:43217).
 
 ```bash
 npm run build
-npm start -- --port 43217
+npm start
 ```
 
-## Notes
+To rebuild the Excel file after changing names or cues:
 
-- The board is meant to be shared in the group chat. Add it to the home screen on iOS/Android for app-like access.
-- File storage works for a local or always-on server. A serverless host will not keep writes after restart unless you add a database or Google Sheets write access later.
+```bash
+python3 scripts/build-excel.py
+```

@@ -14,8 +14,9 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { PersonChip } from "@/components/person-chip";
-import { OUTCOME_CHIPS, type Lead } from "@/lib/types";
+import { formatMoney, parseMoney } from "@/lib/money";
 import { uniquePeople } from "@/lib/people";
+import { MONEY_CHIPS, OUTCOME_CHIPS, type Lead } from "@/lib/types";
 
 type Props = {
   lead: Lead | null;
@@ -64,20 +65,34 @@ function LeadEditorForm({
   const [outcome, setOutcome] = useState(lead.outcome);
   const [assignedTo, setAssignedTo] = useState(lead.assignedTo ?? "");
   const [done, setDone] = useState(lead.done);
+  const [committed, setCommitted] = useState(lead.committed ? String(lead.committed) : "");
+  const [received, setReceived] = useState(lead.received ? String(lead.received) : "");
   const leadId = lead.id;
   const people = uniquePeople(leads);
 
-  async function persist(next: { outcome?: string; assignedTo?: string; done?: boolean }) {
+  async function persist(next: {
+    outcome?: string;
+    assignedTo?: string;
+    done?: boolean;
+    committed?: string;
+    received?: string;
+  }) {
     const nextOutcome = next.outcome ?? outcome;
     const nextAssigned = next.assignedTo ?? assignedTo;
     const nextDone = next.done ?? done;
+    const nextCommitted = next.committed ?? committed;
+    const nextReceived = next.received ?? received;
     setOutcome(nextOutcome);
     setAssignedTo(nextAssigned);
     setDone(nextDone);
+    setCommitted(nextCommitted);
+    setReceived(nextReceived);
     await onSave(leadId, {
       outcome: nextOutcome,
       assignedTo: nextAssigned || null,
       done: nextDone,
+      committed: parseMoney(nextCommitted),
+      received: parseMoney(nextReceived),
       actor: me || undefined,
     });
   }
@@ -138,6 +153,55 @@ function LeadEditorForm({
                 Save
               </Button>
             </div>
+          </section>
+
+          <section className="space-y-2">
+            <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              How much they committed
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {MONEY_CHIPS.map((amount) => (
+                <Button
+                  key={amount}
+                  type="button"
+                  variant={parseMoney(committed) === amount ? "default" : "outline"}
+                  className="h-12"
+                  onClick={() => persist({ committed: String(amount) })}
+                >
+                  {formatMoney(amount)}
+                </Button>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block">
+                <span className="mb-1 block text-[11px] text-muted-foreground">Committed</span>
+                <Input
+                  value={committed}
+                  onChange={(event) => setCommitted(event.target.value)}
+                  inputMode="decimal"
+                  placeholder="0"
+                  className="h-12 text-base"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[11px] text-muted-foreground">Received</span>
+                <Input
+                  value={received}
+                  onChange={(event) => setReceived(event.target.value)}
+                  inputMode="decimal"
+                  placeholder="0"
+                  className="h-12 text-base"
+                />
+              </label>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-12 w-full"
+              onClick={() => persist({ committed, received })}
+            >
+              Save money
+            </Button>
           </section>
 
           <section className="space-y-2">

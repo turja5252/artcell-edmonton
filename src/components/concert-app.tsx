@@ -10,25 +10,34 @@ import {
 } from "react";
 import {
   Check,
+  FileSpreadsheet,
   Handshake,
   ListMusic,
   Plus,
   RefreshCw,
   Search,
   Share2,
+  Ticket,
   Users,
+  Wallet,
 } from "lucide-react";
 
+import { AddGuest } from "@/components/add-guest";
 import { AddLead } from "@/components/add-lead";
+import { GuestEditor } from "@/components/guest-editor";
 import { LeadEditor } from "@/components/lead-editor";
+import { MoneyBoard } from "@/components/money-board";
 import { PersonChip } from "@/components/person-chip";
+import { SeatsBoard } from "@/components/seats-board";
 import { SetlistBoard } from "@/components/setlist-board";
+import { TargetEditor } from "@/components/target-editor";
 import { TeamBoard } from "@/components/team-board";
 import { WhoAmI } from "@/components/who-am-i";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { formatMoney } from "@/lib/money";
 import { formatTime, uniquePeople } from "@/lib/people";
-import type { Lead } from "@/lib/types";
+import type { Guest, GuestStatus, Lead, Settings } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const ME_KEY = "artcell-edmonton-me";
@@ -52,8 +61,9 @@ function writeMe(name: string) {
   window.dispatchEvent(new Event(ME_EVENT));
 }
 
-type Tab = "outreach" | "team" | "setlist";
+type Tab = "outreach" | "money" | "seats" | "team" | "setlist";
 type Filter = "mine" | "open" | "unassigned" | "done" | "all";
+type SeatFilter = "all" | "not_reached" | "reached" | "maybe" | "confirmed" | "mine";
 
 function matches(lead: Lead, query: string, filter: Filter, me: string) {
   const haystack = `${lead.company} ${lead.assignedTo ?? ""} ${lead.outcome}`.toLowerCase();
@@ -67,9 +77,13 @@ function matches(lead: Lead, query: string, filter: Filter, me: string) {
 
 export function ConcertApp({
   initialLeads,
+  initialGuests,
+  initialSettings,
   initialError = "",
 }: {
   initialLeads: Lead[];
+  initialGuests: Guest[];
+  initialSettings: Settings;
   initialError?: string;
 }) {
   const me = useSyncExternalStore(subscribeMe, readMe, () => "");
@@ -79,26 +93,39 @@ export function ConcertApp({
     () => false
   );
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
+  const [guests, setGuests] = useState<Guest[]>(initialGuests);
+  const [settings, setSettings] = useState<Settings>(initialSettings);
   const [tab, setTab] = useState<Tab>("outreach");
   const [filter, setFilter] = useState<Filter>("open");
+  const [seatFilter, setSeatFilter] = useState<SeatFilter>("not_reached");
   const [query, setQuery] = useState("");
   const [error, setError] = useState(initialError);
   const [whoForced, setWhoForced] = useState(false);
   const [whoSkipped, setWhoSkipped] = useState(false);
   const whoOpen = whoForced || (hydrated && !me && !whoSkipped);
   const [addOpen, setAddOpen] = useState(false);
+  const [addGuestOpen, setAddGuestOpen] = useState(false);
   const [active, setActive] = useState<Lead | null>(null);
+  const [activeGuest, setActiveGuest] = useState<Guest | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [toast, setToast] = useState("");
   const [syncing, setSyncing] = useState(false);
+  const [targetKind, setTargetKind] = useState<"money" | "seats" | null>(null);
 
-  const people = useMemo(() => uniquePeople(leads), [leads]);
+  const people = useMemo(() => uniquePeople(leads, guests), [leads, guests]);
 
   const load = useCallback(async () => {
-    const response = await fetch("/api/leads", { cache: "no-store" });
-    const data = (await response.json()) as { leads?: Lead[]; error?: string };
+    const response = await fetch("/api/board", { cache: "no-store" });
+    const data = (await response.json()) as {
+      leads?: Lead[];
+      guests?: Guest[];
+      settings?: Settings;
+      error?: string;
+    };
     if (!response.ok) throw new Error(data.error || "Could not load the board");
-    setLeads(data.leads ?? []);
+    if (data.leads) setLeads(data.leads);
+    if (data.guests) setGuests(data.guests);
+    if (data.settings) setSettings(data.settings);
   }, []);
 
   useEffect(() => {
@@ -195,6 +222,80 @@ export function ConcertApp({
     setToast(`${company} is on the board`);
   }
 
+  async function saveGuest(id: string, patch: Partial<Guest> & { actor?: string }) {
+    setBusyId(id);
+    setGuests((current) =>
+      current.map((guest) =>
+        guest.id === id
+          ? {
+              ...guest,
+              ...patch,
+              assignedTo:
+                patch.assignedTo === undefined ? guest.assignedTo : patch.assignedTo,
+              updatedAt: new Date().toISOString(),
+              updatedBy: patch.actor ?? me ?? guest.updatedBy,
+            }
+          : guest
+      )
+    );
+    setActiveGuest((current) =>
+      current && current.id === id
+        ? {
+            ...current,
+            ...patch,
+            assignedTo:
+              patch.assignedTo === undefined ? current.assignedTo : patch.assignedTo,
+          }
+        : current
+    );
+    try {
+      const response = await fetch(`/api/guests/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...patch, actor: patch.actor ?? me }),
+      });
+      const data = (await response.json()) as { guest?: Guest; error?: string };
+      if (!response.ok) throw new Error(data.error || "Update failed");
+      if (data.guest) {
+        setGuests((current) =>
+          current.map((guest) => (guest.id === id ? data.guest! : guest))
+        );
+        setActiveGuest((current) => (current?.id === id ? data.guest! : current));
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Update failed");
+      await load();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function addGuest(name: string, assignedTo: string | null, partySize: number) {
+    const response = await fetch("/api/guests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, assignedTo, partySize, actor: me }),
+    });
+    const data = (await response.json()) as { guest?: Guest; error?: string };
+    if (!response.ok) throw new Error(data.error || "Could not add");
+    if (data.guest) setGuests((current) => [...current, data.guest!]);
+    setToast(`${name} is on the invite list`);
+  }
+
+  async function saveSettings(patch: Partial<Settings>) {
+    const next = { ...settings, ...patch };
+    setSettings(next);
+    const response = await fetch("/api/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...patch, actor: me }),
+    });
+    const data = (await response.json()) as { settings?: Settings; error?: string };
+    if (!response.ok) throw new Error(data.error || "Could not save target");
+    if (data.settings) setSettings(data.settings);
+    setToast("Target saved");
+  }
+
   async function syncSheet() {
     setSyncing(true);
     setError("");
@@ -264,10 +365,20 @@ export function ConcertApp({
             Artcell
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Sponsor outreach + setlist, built for thumbs.
+            Calls, money, seats — tap to update, or download Excel for 365.
           </p>
         </div>
         <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-lg"
+            className="size-11"
+            render={<a href="/Artcell-Edmonton-Show.xlsx" download />}
+            aria-label="Download Excel for Microsoft 365"
+          >
+            <FileSpreadsheet />
+          </Button>
           <Button
             type="button"
             variant="outline"
@@ -305,11 +416,13 @@ export function ConcertApp({
         )}
       </button>
 
-      <div className="mt-4 grid grid-cols-3 gap-2">
-        <Stat label="Reached" value={`${doneCount}/${leads.length || "—"}`} />
-        <Stat label="Still open" value={String(openCount)} />
-        <Stat label={me ? "Your open" : "Need owner"} value={String(me ? myOpen : unassignedCount)} />
-      </div>
+      {tab === "outreach" ? (
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          <Stat label="Reached" value={`${doneCount}/${leads.length || "—"}`} />
+          <Stat label="Still open" value={String(openCount)} />
+          <Stat label={me ? "Your open" : "Need owner"} value={String(me ? myOpen : unassignedCount)} />
+        </div>
+      ) : null}
 
       {error ? (
         <div className="mt-3 rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -389,6 +502,42 @@ export function ConcertApp({
         </section>
       )}
 
+      {tab === "money" && (
+        <section className="mt-5 flex-1">
+          <MoneyBoard
+            leads={leads}
+            target={settings.moneyTarget}
+            onSetTarget={() => setTargetKind("money")}
+            onOpenLead={(lead) => setActive(lead)}
+          />
+        </section>
+      )}
+
+      {tab === "seats" && (
+        <section className="mt-5 flex-1">
+          <SeatsBoard
+            guests={guests}
+            target={settings.attendanceTarget}
+            me={me}
+            filter={seatFilter}
+            onFilter={setSeatFilter}
+            onSetTarget={() => setTargetKind("seats")}
+            onOpen={(guest) => setActiveGuest(guest)}
+            onClaim={(guest) => {
+              if (!me) {
+                setWhoOpen(true);
+                return;
+              }
+              void saveGuest(guest.id, { assignedTo: me, actor: me });
+              setToast(`You’re on ${guest.name}`);
+            }}
+            onStatus={(guest, status: GuestStatus) => {
+              void saveGuest(guest.id, { status, actor: me });
+            }}
+          />
+        </section>
+      )}
+
       {tab === "team" && (
         <section className="mt-5 flex-1">
           <TeamBoard
@@ -412,22 +561,36 @@ export function ConcertApp({
         </section>
       )}
 
-      <Button
-        type="button"
-        className="fixed right-4 bottom-24 z-30 size-14 rounded-full shadow-lg sm:right-[max(1rem,calc(50%-22rem))]"
-        onClick={() => setAddOpen(true)}
-        aria-label="Add a company"
-      >
-        <Plus className="size-6" />
-      </Button>
+      {tab === "seats" || tab === "outreach" || tab === "money" ? (
+        <Button
+          type="button"
+          className="fixed right-4 bottom-24 z-30 size-14 rounded-full shadow-lg sm:right-[max(1rem,calc(50%-22rem))]"
+          onClick={() => (tab === "seats" ? setAddGuestOpen(true) : setAddOpen(true))}
+          aria-label={tab === "seats" ? "Add someone to invite" : "Add a company"}
+        >
+          <Plus className="size-6" />
+        </Button>
+      ) : null}
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border/80 bg-background/85 px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md">
-        <div className="mx-auto grid max-w-3xl grid-cols-3 gap-1">
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border/80 bg-background/85 px-2 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md">
+        <div className="mx-auto grid max-w-3xl grid-cols-5 gap-0.5">
           <NavButton
             active={tab === "outreach"}
             icon={<Handshake className="size-5" />}
-            label="Outreach"
+            label="Calls"
             onClick={() => setTab("outreach")}
+          />
+          <NavButton
+            active={tab === "money"}
+            icon={<Wallet className="size-5" />}
+            label="Money"
+            onClick={() => setTab("money")}
+          />
+          <NavButton
+            active={tab === "seats"}
+            icon={<Ticket className="size-5" />}
+            label="Seats"
+            onClick={() => setTab("seats")}
           />
           <NavButton
             active={tab === "team"}
@@ -438,7 +601,7 @@ export function ConcertApp({
           <NavButton
             active={tab === "setlist"}
             icon={<ListMusic className="size-5" />}
-            label="Setlist"
+            label="Songs"
             onClick={() => setTab("setlist")}
           />
         </div>
@@ -464,6 +627,13 @@ export function ConcertApp({
         onOpenChange={setAddOpen}
         onAdd={addLead}
       />
+      <AddGuest
+        open={addGuestOpen}
+        me={me}
+        people={people}
+        onOpenChange={setAddGuestOpen}
+        onAdd={addGuest}
+      />
       <LeadEditor
         lead={active}
         leads={leads}
@@ -474,6 +644,40 @@ export function ConcertApp({
         }}
         onSave={saveLead}
         busy={busyId === active?.id}
+      />
+      <GuestEditor
+        guest={activeGuest}
+        guests={guests}
+        leads={leads}
+        me={me}
+        open={Boolean(activeGuest)}
+        onOpenChange={(open) => {
+          if (!open) setActiveGuest(null);
+        }}
+        onSave={saveGuest}
+        busy={busyId === activeGuest?.id}
+      />
+      <TargetEditor
+        open={targetKind === "money"}
+        title="Money target"
+        description="What the show needs to raise. Remaining = target minus committed."
+        label="Target (CAD)"
+        value={settings.moneyTarget}
+        onOpenChange={(open) => {
+          if (!open) setTargetKind(null);
+        }}
+        onSave={(value) => saveSettings({ moneyTarget: value })}
+      />
+      <TargetEditor
+        open={targetKind === "seats"}
+        title="Seat target"
+        description="How many people you want in the room. Remaining = target minus confirmed seats."
+        label="Seats"
+        value={settings.attendanceTarget}
+        onOpenChange={(open) => {
+          if (!open) setTargetKind(null);
+        }}
+        onSave={(value) => saveSettings({ attendanceTarget: value })}
       />
     </div>
   );
@@ -550,6 +754,11 @@ function LeadCard({
               {lead.done ? (
                 <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-300">
                   Done
+                </span>
+              ) : null}
+              {lead.committed > 0 ? (
+                <span className="text-xs font-medium text-primary">
+                  {formatMoney(lead.committed)}
                 </span>
               ) : null}
             </div>
