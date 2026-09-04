@@ -325,7 +325,8 @@ export function addLeadAttachment(input: {
       current.id,
       attachment.id,
       attachment.fileName,
-      input.bytes
+      input.bytes,
+      mimeType
     );
     const next = stamp(
       normalizeLead({
