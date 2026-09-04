@@ -31,6 +31,7 @@ import { PersonChip } from "@/components/person-chip";
 import { SeatsBoard, type SeatFilter } from "@/components/seats-board";
 import { SetlistBoard } from "@/components/setlist-board";
 import { TargetEditor } from "@/components/target-editor";
+import { TicketsEditor } from "@/components/tickets-editor";
 import { TeamBoard } from "@/components/team-board";
 import { WhoAmI } from "@/components/who-am-i";
 import { Button } from "@/components/ui/button";
@@ -114,6 +115,7 @@ export function ConcertApp({
   const [toast, setToast] = useState("");
   const [syncing, setSyncing] = useState(false);
   const [targetKind, setTargetKind] = useState<"money" | "seats" | null>(null);
+  const [ticketsOpen, setTicketsOpen] = useState(false);
 
   const people = useMemo(() => {
     const names = new Set(members.map((member) => member.name));
@@ -448,7 +450,9 @@ export function ConcertApp({
     const data = (await response.json()) as { settings?: Settings; error?: string };
     if (!response.ok) throw new Error(data.error || "Could not save target");
     if (data.settings) setSettings(data.settings);
-    setToast("Target saved");
+    setToast(
+      patch.ticketsSold !== undefined ? "Ticket count saved" : "Target saved"
+    );
   }
 
   async function syncSheet() {
@@ -673,10 +677,14 @@ export function ConcertApp({
           <SeatsBoard
             guests={guests}
             target={settings.attendanceTarget}
+            ticketsSold={settings.ticketsSold}
+            ticketsSoldUpdatedAt={settings.ticketsSoldUpdatedAt}
+            ticketsSoldUpdatedBy={settings.ticketsSoldUpdatedBy}
             me={me}
             filter={seatFilter}
             onFilter={setSeatFilter}
             onSetTarget={() => setTargetKind("seats")}
+            onEditTickets={() => setTicketsOpen(true)}
             onOpen={(guest) => setActiveGuest(guest)}
             onClaim={(guest) => {
               if (!me) {
@@ -849,6 +857,14 @@ export function ConcertApp({
           if (!open) setTargetKind(null);
         }}
         onSave={(value) => saveSettings({ attendanceTarget: value })}
+      />
+      <TicketsEditor
+        open={ticketsOpen}
+        ticketsSold={settings.ticketsSold}
+        updatedAt={settings.ticketsSoldUpdatedAt}
+        me={me}
+        onOpenChange={setTicketsOpen}
+        onSave={(input) => saveSettings(input)}
       />
     </div>
   );

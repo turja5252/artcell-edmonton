@@ -28,7 +28,13 @@ const GUESTS_PATH = path.join(process.cwd(), "data", "guests.json");
 const MEMBERS_PATH = path.join(process.cwd(), "data", "members.json");
 const SETTINGS_PATH = path.join(process.cwd(), "data", "settings.json");
 
-const DEFAULT_SETTINGS: Settings = { moneyTarget: 0, attendanceTarget: 0 };
+const DEFAULT_SETTINGS: Settings = {
+  moneyTarget: 0,
+  attendanceTarget: 0,
+  ticketsSold: 0,
+  ticketsSoldUpdatedAt: null,
+  ticketsSoldUpdatedBy: null,
+};
 
 let queue: Promise<unknown> = Promise.resolve();
 
@@ -184,6 +190,9 @@ async function readSettingsFile(): Promise<Settings> {
     return {
       moneyTarget: parseMoney(parsed.moneyTarget),
       attendanceTarget: parseCount(parsed.attendanceTarget),
+      ticketsSold: parseCount(parsed.ticketsSold),
+      ticketsSoldUpdatedAt: parsed.ticketsSoldUpdatedAt ?? null,
+      ticketsSoldUpdatedBy: parsed.ticketsSoldUpdatedBy?.trim() || null,
     };
   } catch {
     return { ...DEFAULT_SETTINGS };
@@ -590,6 +599,7 @@ export function patchGuest(id: string, patch: GuestPatch): Promise<Guest> {
 export function updateSettings(patch: Partial<Settings>): Promise<Settings> {
   return enqueue(async () => {
     const current = await readSettingsFile();
+    const ticketsTouched = patch.ticketsSold !== undefined;
     const next: Settings = {
       moneyTarget:
         patch.moneyTarget === undefined
@@ -599,6 +609,20 @@ export function updateSettings(patch: Partial<Settings>): Promise<Settings> {
         patch.attendanceTarget === undefined
           ? current.attendanceTarget
           : parseCount(patch.attendanceTarget),
+      ticketsSold:
+        patch.ticketsSold === undefined
+          ? current.ticketsSold
+          : parseCount(patch.ticketsSold),
+      ticketsSoldUpdatedAt: ticketsTouched
+        ? patch.ticketsSoldUpdatedAt?.trim() || new Date().toISOString()
+        : patch.ticketsSoldUpdatedAt === undefined
+          ? current.ticketsSoldUpdatedAt
+          : patch.ticketsSoldUpdatedAt,
+      ticketsSoldUpdatedBy: ticketsTouched
+        ? patch.ticketsSoldUpdatedBy?.trim() || current.ticketsSoldUpdatedBy
+        : patch.ticketsSoldUpdatedBy === undefined
+          ? current.ticketsSoldUpdatedBy
+          : patch.ticketsSoldUpdatedBy?.trim() || null,
     };
     await writeSettingsFile(next);
     return next;

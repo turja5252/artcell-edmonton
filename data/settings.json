@@ -1,4 +1,7 @@
 {
   "moneyTarget": 8000,
-  "attendanceTarget": 400
+  "attendanceTarget": 400,
+  "ticketsSold": 0,
+  "ticketsSoldUpdatedAt": null,
+  "ticketsSoldUpdatedBy": null
 }

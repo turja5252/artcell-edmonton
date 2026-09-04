@@ -1,24 +1,28 @@
 "use client";
 
-import { Phone } from "lucide-react";
-
 import { PersonChip } from "@/components/person-chip";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { formatSeats } from "@/lib/money";
 import { formatTime } from "@/lib/people";
 import type { Guest, GuestStatus } from "@/lib/types";
 import { GUEST_STATUSES, displayGuestName, telHref } from "@/lib/types";
+import { formatTicketDay } from "@/components/tickets-editor";
 import { cn } from "@/lib/utils";
+import { Phone } from "lucide-react";
 
 export type SeatFilter = "all" | "not_called" | "confirmed" | "tentative" | "declined" | "mine";
 
 type Props = {
   guests: Guest[];
   target: number;
+  ticketsSold: number;
+  ticketsSoldUpdatedAt: string | null;
+  ticketsSoldUpdatedBy: string | null;
   me: string;
   filter: SeatFilter;
   onFilter: (filter: SeatFilter) => void;
   onSetTarget: () => void;
+  onEditTickets: () => void;
   onOpen: (guest: Guest) => void;
   onClaim: (guest: Guest) => void;
   onStatus: (guest: Guest, status: GuestStatus) => void;
@@ -28,10 +32,14 @@ type Props = {
 export function SeatsBoard({
   guests,
   target,
+  ticketsSold,
+  ticketsSoldUpdatedAt,
+  ticketsSoldUpdatedBy,
   me,
   filter,
   onFilter,
   onSetTarget,
+  onEditTickets,
   onOpen,
   onClaim,
   onStatus,
@@ -92,6 +100,26 @@ export function SeatsBoard({
       <p className="text-sm text-muted-foreground">
         Call the list, log confirmed / tentative / declined, and how many people are coming.
       </p>
+
+      <button
+        type="button"
+        onClick={onEditTickets}
+        className="w-full rounded-2xl border border-primary/30 bg-primary/10 p-4 text-left"
+      >
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <p className="text-[11px] tracking-wide text-primary uppercase">Tickets sold</p>
+            <p className="font-heading mt-1 text-3xl leading-none tabular-nums text-primary">
+              {ticketsSold.toLocaleString("en-CA")}
+            </p>
+          </div>
+          <span className="text-sm font-medium text-primary">Update</span>
+        </div>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Last updated {formatTicketDay(ticketsSoldUpdatedAt)}
+          {ticketsSoldUpdatedBy ? ` · ${ticketsSoldUpdatedBy}` : ""}
+        </p>
+      </button>
 
       <div className="grid grid-cols-2 gap-2">
         <HeroStat label="Confirmed" value={formatSeats(confirmed)} accent />

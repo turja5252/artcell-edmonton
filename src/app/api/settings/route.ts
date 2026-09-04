@@ -19,7 +19,12 @@ export async function GET() {
 export async function PATCH(request: Request) {
   try {
     const body = (await request.json()) as Partial<Settings> & { actor?: string | null };
-    const settings = await updateSettings(body);
+    const settings = await updateSettings({
+      ...body,
+      ticketsSoldUpdatedBy:
+        body.ticketsSoldUpdatedBy ??
+        (body.ticketsSold !== undefined ? body.actor ?? null : body.ticketsSoldUpdatedBy),
+    });
     return NextResponse.json({ settings });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to save settings";

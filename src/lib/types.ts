@@ -91,6 +91,9 @@ export type GuestPatch = Partial<
 export type Settings = {
   moneyTarget: number;
   attendanceTarget: number;
+  ticketsSold: number;
+  ticketsSoldUpdatedAt: string | null;
+  ticketsSoldUpdatedBy: string | null;
 };
 
 export type SetlistCue = {
