@@ -49,7 +49,11 @@ import {
 import { formatMoney } from "@/lib/money";
 import { formatTime } from "@/lib/people";
 import type { Guest, GuestStatus, Lead, Member, Settings } from "@/lib/types";
-import { DECLINED_GLOW_CLASS, displayGuestName, isLeadDeclined } from "@/lib/types";
+import {
+  displayGuestName,
+  isLeadDeclined,
+  leadGlowClass,
+} from "@/lib/types";
 import {
   ADMIN_DISPLAY_NAME,
   canonicalizePersonName,
@@ -1163,7 +1167,7 @@ function LeadCard({
     <article
       className={cn(
         "rounded-2xl border border-border/80 bg-card/80 p-3 shadow-sm backdrop-blur-sm",
-        declined && DECLINED_GLOW_CLASS,
+        leadGlowClass(lead),
         lead.done && !declined && "opacity-75"
       )}
     >
@@ -1188,8 +1192,23 @@ function LeadCard({
                 </span>
               ) : null}
               {lead.committed > 0 ? (
-                <span className="text-xs font-medium text-primary">
-                  {formatMoney(lead.committed)}
+                <span
+                  className={cn(
+                    "text-xs font-medium",
+                    declined ? "text-foreground" : "text-emerald-300"
+                  )}
+                >
+                  Pledged {formatMoney(lead.committed)}
+                </span>
+              ) : null}
+              {lead.received > 0 ? (
+                <span
+                  className={cn(
+                    "text-xs font-medium",
+                    declined ? "text-muted-foreground" : "text-emerald-300/90"
+                  )}
+                >
+                  Received {formatMoney(lead.received)}
                 </span>
               ) : null}
               {(lead.attachments?.length ?? 0) > 0 ? (

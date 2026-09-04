@@ -2,7 +2,7 @@
 
 import { PersonChip } from "@/components/person-chip";
 import { countableMoney, formatMoney } from "@/lib/money";
-import { DECLINED_GLOW_CLASS, isLeadDeclined, type Lead } from "@/lib/types";
+import { isLeadDeclined, leadGlowClass, type Lead } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -123,8 +123,8 @@ export function MoneyBoard({ leads, members, target, onSetTarget, onOpenLead }: 
                 onClick={() => onOpenLead(lead)}
                 className={cn(
                   "flex w-full items-center justify-between gap-3 rounded-2xl border border-border/80 bg-card/80 p-3 text-left",
-                  // Glow every declined company, including $0 “Add $” rows.
-                  declined && DECLINED_GLOW_CLASS
+                  // Declined red wins (including $0 rows). Pledged/received glow green.
+                  leadGlowClass(lead)
                 )}
               >
                 <span>
@@ -143,10 +143,19 @@ export function MoneyBoard({ leads, members, target, onSetTarget, onOpenLead }: 
                   </span>
                 </span>
                 <span className="text-right">
+                  {money.committed > 0 && !declined ? (
+                    <span className="mb-0.5 block text-[10px] font-medium tracking-wide text-emerald-300/90 uppercase">
+                      Pledged
+                    </span>
+                  ) : null}
                   <span
                     className={cn(
                       "font-heading block text-xl tabular-nums",
-                      money.committed > 0 ? "text-primary" : "text-muted-foreground"
+                      money.committed > 0
+                        ? declined
+                          ? "text-foreground"
+                          : "text-emerald-300"
+                        : "text-muted-foreground"
                     )}
                   >
                     {money.committed > 0
@@ -156,10 +165,15 @@ export function MoneyBoard({ leads, members, target, onSetTarget, onOpenLead }: 
                         : "Add $"}
                   </span>
                   {money.received > 0 ? (
-                    <span className="text-xs text-muted-foreground">
+                    <span
+                      className={cn(
+                        "text-xs",
+                        declined ? "text-muted-foreground" : "text-emerald-200/80"
+                      )}
+                    >
                       {lead.receivedBy
                         ? `${lead.receivedBy.split(" ")[0]} collected ${formatMoney(money.received)}`
-                        : `received ${formatMoney(money.received)}`}
+                        : `Received ${formatMoney(money.received)}`}
                     </span>
                   ) : null}
                 </span>

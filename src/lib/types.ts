@@ -133,6 +133,33 @@ export const OUTCOME_CHIPS = [
 export const DECLINED_GLOW_CLASS =
   "ring-2 ring-destructive shadow-[0_0_18px_2px_rgba(239,68,68,0.42)]";
 
+/** Ring + green glow for pledged or received money (Calls + Money). */
+export const MONEY_GLOW_CLASS =
+  "ring-2 ring-emerald-400/80 shadow-[0_0_18px_2px_rgba(16,185,129,0.45)]";
+
+export function hasLeadMoney(lead: {
+  committed?: number | null;
+  received?: number | null;
+}): boolean {
+  return (Number(lead.committed) || 0) > 0 || (Number(lead.received) || 0) > 0;
+}
+
+/**
+ * Glow precedence: declined red wins even if they pledged or paid.
+ * Then green if committed or received is above zero. Otherwise no glow.
+ */
+export function leadGlowClass(lead: {
+  declined?: boolean | null;
+  outcome?: string | null;
+  notes?: string | null;
+  committed?: number | null;
+  received?: number | null;
+}): string | undefined {
+  if (isLeadDeclined(lead)) return DECLINED_GLOW_CLASS;
+  if (hasLeadMoney(lead)) return MONEY_GLOW_CLASS;
+  return undefined;
+}
+
 const DECLINED_OUTCOME_RE =
   /declined|said\s+no|not\s+interested|won['’]?t\s+sponsor|not\s+sponsoring|turned\s+down|\brejected\b|\bpass\b|\bnope\b|\bno thanks\b/i;
 
