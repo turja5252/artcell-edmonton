@@ -12,6 +12,27 @@ export function assertTeamAdminActor(name: string | null | undefined) {
 /** Reserved display name for the admin identity (not a roster teammate). */
 export const ADMIN_DISPLAY_NAME = "Admin";
 
+export const ADMIN_UNLOCK_KEY = "artcell-edmonton-admin-unlocked";
+const ADMIN_UNLOCK_EVENT = "artcell-admin-unlock";
+
+export function subscribeAdminUnlock(onChange: () => void) {
+  window.addEventListener(ADMIN_UNLOCK_EVENT, onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    window.removeEventListener(ADMIN_UNLOCK_EVENT, onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}
+
+export function readAdminUnlocked() {
+  return window.localStorage.getItem(ADMIN_UNLOCK_KEY) === "1";
+}
+
+export function persistAdminUnlock() {
+  window.localStorage.setItem(ADMIN_UNLOCK_KEY, "1");
+  window.dispatchEvent(new Event(ADMIN_UNLOCK_EVENT));
+}
+
 /** One roster label for Khaled / Khaled Bhai / Novel. Never store the nicknames. */
 export const KHALED_CANONICAL = "Khaled Bari";
 

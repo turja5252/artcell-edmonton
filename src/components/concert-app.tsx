@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
+  type PointerEvent,
   type ReactNode,
 } from "react";
 import {
@@ -60,7 +61,10 @@ import {
   ADMIN_DISPLAY_NAME,
   canonicalizePersonName,
   isTeamAdmin,
+  persistAdminUnlock,
+  readAdminUnlocked,
   samePerson,
+  subscribeAdminUnlock,
 } from "@/lib/team-admin";
 import { cn } from "@/lib/utils";
 
@@ -116,6 +120,11 @@ export function ConcertApp({
   initialError?: string;
 }) {
   const me = useSyncExternalStore(subscribeMe, readMe, () => "");
+  const adminUnlocked = useSyncExternalStore(
+    subscribeAdminUnlock,
+    readAdminUnlocked,
+    () => false
+  );
   const hydrated = useSyncExternalStore(
     () => () => undefined,
     () => true,
@@ -150,6 +159,8 @@ export function ConcertApp({
   const busyIdRef = useRef<string | null>(null);
   const memberSaving = useRef(false);
   const settingsSaving = useRef(false);
+  const identityHold = useRef<number | null>(null);
+  const brandTaps = useRef<number[]>([]);
   const deletedIds = useRef({
     leads: new Set<string>(),
     guests: new Set<string>(),
@@ -291,6 +302,42 @@ export function ConcertApp({
     const timer = window.setTimeout(() => setToast(""), 2400);
     return () => window.clearTimeout(timer);
   }, [toast]);
+
+  useEffect(() => () => clearIdentityHold(), []);
+
+  function revealExtraIdentity() {
+    if (!readAdminUnlocked()) {
+      persistAdminUnlock();
+      setToast("Got it");
+    }
+    setWhoOpen(true);
+  }
+
+  function clearIdentityHold() {
+    if (identityHold.current != null) {
+      window.clearTimeout(identityHold.current);
+      identityHold.current = null;
+    }
+  }
+
+  function onIdentityPointerDown(event: PointerEvent<HTMLButtonElement>) {
+    if (event.button !== 0) return;
+    clearIdentityHold();
+    identityHold.current = window.setTimeout(() => {
+      identityHold.current = null;
+      revealExtraIdentity();
+    }, 1800);
+  }
+
+  function onBrandActivate() {
+    const now = Date.now();
+    brandTaps.current = brandTaps.current.filter((stamp) => now - stamp < 4000);
+    brandTaps.current.push(now);
+    if (brandTaps.current.length >= 7) {
+      brandTaps.current = [];
+      revealExtraIdentity();
+    }
+  }
 
   function pickMe(name: string) {
     writeMe(name);
@@ -734,7 +781,10 @@ export function ConcertApp({
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col px-4 pb-32 pt-5 sm:px-6">
       <header className="flex items-start justify-between gap-3">
-        <div>
+        <div
+          className="select-none"
+          onClick={onBrandActivate}
+        >
           <p className="text-[11px] font-medium tracking-[0.22em] text-primary uppercase">
             Edmonton show
           </p>
@@ -783,8 +833,15 @@ export function ConcertApp({
       <button
         type="button"
         onClick={() => setWhoOpen(true)}
+        onPointerDown={onIdentityPointerDown}
+        onPointerUp={clearIdentityHold}
+        onPointerCancel={clearIdentityHold}
+        onPointerLeave={(event) => {
+          if (event.pointerType === "mouse") clearIdentityHold();
+        }}
+        onContextMenu={(event) => event.preventDefault()}
         className={cn(
-          "relative z-10 mt-4 flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-left active:bg-card",
+          "relative z-10 mt-4 flex w-full select-none items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-left active:bg-card",
           isTeamAdmin(me)
             ? "border-primary/70 bg-primary/10"
             : "border-border/80 bg-card/70"
@@ -792,9 +849,11 @@ export function ConcertApp({
       >
         <span className="min-w-0">
           <span className="block text-sm text-muted-foreground">Updating as</span>
-          <span className="mt-0.5 block text-xs text-muted-foreground">
-            Who are you? Admin is the first choice
-          </span>
+          {adminUnlocked ? (
+            <span className="mt-0.5 block text-xs text-muted-foreground">
+              Who are you? Admin is the first choice
+            </span>
+          ) : null}
         </span>
         {isTeamAdmin(me) ? (
           <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border-2 border-primary bg-primary px-3 py-1 text-sm font-semibold text-primary-foreground">
@@ -805,7 +864,7 @@ export function ConcertApp({
           <PersonChip name={me} />
         ) : (
           <span className="shrink-0 text-sm font-medium text-primary">
-            Tap your name or Admin
+            {adminUnlocked ? "Tap your name or Admin" : "Tap your name"}
           </span>
         )}
       </button>
@@ -1031,6 +1090,7 @@ export function ConcertApp({
         open={whoOpen}
         people={people}
         current={me}
+        showAdmin={adminUnlocked}
         onPick={pickMe}
         onOpenChange={setWhoOpen}
       />

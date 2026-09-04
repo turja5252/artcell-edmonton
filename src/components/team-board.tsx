@@ -96,7 +96,7 @@ export function TeamBoard({
         <p className="text-sm text-muted-foreground">
           {canManage
             ? "You’re Admin. Add organizers or tap Edit on anyone to change name, phone, or email."
-            : "Team roster. Switch Updating as → Admin to add, edit, or remove teammates."}
+            : "Team roster."}
         </p>
         {canManage ? (
           <Button

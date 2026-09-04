@@ -19,11 +19,19 @@ type Props = {
   open: boolean;
   people: string[];
   current: string;
+  showAdmin?: boolean;
   onPick: (name: string) => void;
   onOpenChange: (open: boolean) => void;
 };
 
-export function WhoAmI({ open, people, current, onPick, onOpenChange }: Props) {
+export function WhoAmI({
+  open,
+  people,
+  current,
+  showAdmin = false,
+  onPick,
+  onOpenChange,
+}: Props) {
   const teammates = people.filter((person) => !isTeamAdmin(person));
   const adminSelected = isTeamAdmin(current);
 
@@ -35,53 +43,57 @@ export function WhoAmI({ open, people, current, onPick, onOpenChange }: Props) {
             Who are you?
           </DialogTitle>
           <DialogDescription>
-            Tap your name to update the board. Admin is at the top — use it only to add,
-            edit, or remove teammates, not to claim calls.
+            {showAdmin
+              ? "Tap your name to update the board. Admin is at the top — use it only to add, edit, or remove teammates, not to claim calls."
+              : "Tap your name to update the board."}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          <button
-            type="button"
-            onClick={() => onPick(ADMIN_DISPLAY_NAME)}
-            className={cn(
-              "flex w-full items-center gap-3 rounded-2xl border-2 px-3 py-3 text-left transition-colors",
-              adminSelected
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-primary bg-primary/12 text-foreground"
-            )}
-          >
-            <span
+          {showAdmin ? (
+            <button
+              type="button"
+              onClick={() => onPick(ADMIN_DISPLAY_NAME)}
               className={cn(
-                "grid size-12 shrink-0 place-items-center rounded-full",
+                "flex w-full items-center gap-3 rounded-2xl border-2 px-3 py-3 text-left transition-colors",
                 adminSelected
-                  ? "bg-primary-foreground/15 text-primary-foreground"
-                  : "bg-primary text-primary-foreground"
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-primary bg-primary/12 text-foreground"
               )}
             >
-              <Shield className="size-6" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-lg font-semibold leading-tight">Admin</span>
               <span
                 className={cn(
-                  "mt-0.5 block text-sm leading-snug",
-                  adminSelected ? "text-primary-foreground/85" : "text-muted-foreground"
+                  "grid size-12 shrink-0 place-items-center rounded-full",
+                  adminSelected
+                    ? "bg-primary-foreground/15 text-primary-foreground"
+                    : "bg-primary text-primary-foreground"
                 )}
               >
-                Manage the roster — add, edit, or remove teammates
+                <Shield className="size-6" />
               </span>
-            </span>
-            {adminSelected ? (
-              <span className="shrink-0 text-xs font-semibold uppercase tracking-wide">
-                Selected
+              <span className="min-w-0 flex-1">
+                <span className="block text-lg font-semibold leading-tight">Admin</span>
+                <span
+                  className={cn(
+                    "mt-0.5 block text-sm leading-snug",
+                    adminSelected ? "text-primary-foreground/85" : "text-muted-foreground"
+                  )}
+                >
+                  Manage the roster — add, edit, or remove teammates
+                </span>
               </span>
-            ) : null}
-          </button>
+              {adminSelected ? (
+                <span className="shrink-0 text-xs font-semibold uppercase tracking-wide">
+                  Selected
+                </span>
+              ) : null}
+            </button>
+          ) : null}
 
           {teammates.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No teammates on the roster yet. Choose Admin, then open the Team tab to add
-              people.
+              {showAdmin
+                ? "No teammates on the roster yet. Choose Admin, then open the Team tab to add people."
+                : "No teammates on the roster yet."}
             </p>
           ) : (
             <div>
