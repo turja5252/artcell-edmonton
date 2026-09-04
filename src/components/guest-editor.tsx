@@ -14,13 +14,11 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { uniquePeople } from "@/lib/people";
-import { GUEST_STATUSES, type Guest, type GuestStatus, type Lead } from "@/lib/types";
+import { GUEST_STATUSES, type Guest, type GuestStatus } from "@/lib/types";
 
 type Props = {
   guest: Guest | null;
-  guests: Guest[];
-  leads: Lead[];
+  people: string[];
   me: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -30,8 +28,7 @@ type Props = {
 
 export function GuestEditor({
   guest,
-  guests,
-  leads,
+  people,
   me,
   open,
   onOpenChange,
@@ -43,8 +40,7 @@ export function GuestEditor({
     <GuestEditorForm
       key={guest.id}
       guest={guest}
-      guests={guests}
-      leads={leads}
+      people={people}
       me={me}
       open={open}
       onOpenChange={onOpenChange}
@@ -56,8 +52,7 @@ export function GuestEditor({
 
 function GuestEditorForm({
   guest,
-  guests,
-  leads,
+  people,
   me,
   open,
   onOpenChange,
@@ -68,7 +63,6 @@ function GuestEditorForm({
   const [status, setStatus] = useState<GuestStatus>(guest.status);
   const [partySize, setPartySize] = useState(String(guest.partySize));
   const [notes, setNotes] = useState(guest.notes);
-  const people = uniquePeople(leads, guests);
 
   async function persist(next: {
     assignedTo?: string;

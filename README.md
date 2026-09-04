@@ -7,7 +7,8 @@ Phone board and Excel workbook for the Artcell Edmonton concert team. Starts fro
 - **Calls** — claim a company, mark the call done, leave what happened.
 - **Money** — set a target, log committed and received, see grand total and remaining.
 - **Seats** — attendance outreach: who you invited, seats, confirmed / maybe / remaining.
-- **Team** and **Songs** — who is carrying what, plus setlist cues.
+- **Team** — add organizers to the roster; they appear in “Who are you?” and assignment lists.
+- **Songs** — setlist cues.
 
 Anyone with the link can tap. No login. The spreadsheet icon downloads the Excel file for Microsoft 365.
 

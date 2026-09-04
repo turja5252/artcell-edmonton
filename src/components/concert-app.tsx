@@ -37,7 +37,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatMoney } from "@/lib/money";
 import { formatTime, uniquePeople } from "@/lib/people";
-import type { Guest, GuestStatus, Lead, Settings } from "@/lib/types";
+import type { Guest, GuestStatus, Lead, Member, Settings } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const ME_KEY = "artcell-edmonton-me";
@@ -78,11 +78,13 @@ function matches(lead: Lead, query: string, filter: Filter, me: string) {
 export function ConcertApp({
   initialLeads,
   initialGuests,
+  initialMembers,
   initialSettings,
   initialError = "",
 }: {
   initialLeads: Lead[];
   initialGuests: Guest[];
+  initialMembers: Member[];
   initialSettings: Settings;
   initialError?: string;
 }) {
@@ -94,6 +96,7 @@ export function ConcertApp({
   );
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [guests, setGuests] = useState<Guest[]>(initialGuests);
+  const [members, setMembers] = useState<Member[]>(initialMembers);
   const [settings, setSettings] = useState<Settings>(initialSettings);
   const [tab, setTab] = useState<Tab>("outreach");
   const [filter, setFilter] = useState<Filter>("open");
@@ -112,19 +115,25 @@ export function ConcertApp({
   const [syncing, setSyncing] = useState(false);
   const [targetKind, setTargetKind] = useState<"money" | "seats" | null>(null);
 
-  const people = useMemo(() => uniquePeople(leads, guests), [leads, guests]);
+  const people = useMemo(() => {
+    const names = new Set(members.map((member) => member.name));
+    for (const name of uniquePeople(leads, guests)) names.add(name);
+    return [...names].sort((a, b) => a.localeCompare(b));
+  }, [members, leads, guests]);
 
   const load = useCallback(async () => {
     const response = await fetch("/api/board", { cache: "no-store" });
     const data = (await response.json()) as {
       leads?: Lead[];
       guests?: Guest[];
+      members?: Member[];
       settings?: Settings;
       error?: string;
     };
     if (!response.ok) throw new Error(data.error || "Could not load the board");
     if (data.leads) setLeads(data.leads);
     if (data.guests) setGuests(data.guests);
+    if (data.members) setMembers(data.members);
     if (data.settings) setSettings(data.settings);
   }, []);
 
@@ -151,6 +160,58 @@ export function ConcertApp({
     setWhoForced(false);
     setWhoSkipped(false);
     setFilter("mine");
+  }
+
+  async function ensureMember(name: string) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    if (members.some((member) => member.name.toLowerCase() === trimmed.toLowerCase())) {
+      return;
+    }
+    const response = await fetch("/api/members", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: trimmed }),
+    });
+    const data = (await response.json()) as { member?: Member; error?: string };
+    if (!response.ok) throw new Error(data.error || "Could not add member");
+    if (data.member) {
+      setMembers((current) => {
+        if (current.some((member) => member.id === data.member!.id)) return current;
+        return [...current, data.member!].sort((a, b) => a.name.localeCompare(b.name));
+      });
+    }
+  }
+
+  async function pickMeAndJoin(name: string) {
+    await ensureMember(name);
+    pickMe(name);
+    setToast(`${name} is on the team`);
+  }
+
+  async function addMember(input: { name: string; phone?: string; email?: string }) {
+    const response = await fetch("/api/members", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    const data = (await response.json()) as { member?: Member; error?: string };
+    if (!response.ok) throw new Error(data.error || "Could not add member");
+    if (data.member) {
+      setMembers((current) => {
+        if (current.some((member) => member.id === data.member!.id)) return current;
+        return [...current, data.member!].sort((a, b) => a.name.localeCompare(b.name));
+      });
+      setToast(`${data.member.name} joined the team`);
+    }
+  }
+
+  async function removeMember(id: string) {
+    const response = await fetch(`/api/members/${id}`, { method: "DELETE" });
+    const data = (await response.json()) as { error?: string };
+    if (!response.ok) throw new Error(data.error || "Could not remove member");
+    setMembers((current) => current.filter((member) => member.id !== id));
+    setToast("Removed from the team");
   }
 
   function setWhoOpen(open: boolean) {
@@ -541,7 +602,9 @@ export function ConcertApp({
       {tab === "team" && (
         <section className="mt-5 flex-1">
           <TeamBoard
+            members={members}
             leads={leads}
+            guests={guests}
             onFilterPerson={(name) => {
               if (name) {
                 writeMe(name);
@@ -551,6 +614,8 @@ export function ConcertApp({
               }
               setTab("outreach");
             }}
+            onAdd={addMember}
+            onRemove={removeMember}
           />
         </section>
       )}
@@ -618,6 +683,7 @@ export function ConcertApp({
         people={people}
         current={me}
         onPick={pickMe}
+        onAddAndPick={pickMeAndJoin}
         onOpenChange={setWhoOpen}
       />
       <AddLead
@@ -636,7 +702,7 @@ export function ConcertApp({
       />
       <LeadEditor
         lead={active}
-        leads={leads}
+        people={people}
         me={me}
         open={Boolean(active)}
         onOpenChange={(open) => {
@@ -647,8 +713,7 @@ export function ConcertApp({
       />
       <GuestEditor
         guest={activeGuest}
-        guests={guests}
-        leads={leads}
+        people={people}
         me={me}
         open={Boolean(activeGuest)}
         onOpenChange={(open) => {

@@ -19,17 +19,32 @@ type Props = {
   people: string[];
   current: string;
   onPick: (name: string) => void;
+  onAddAndPick?: (name: string) => Promise<void>;
   onOpenChange: (open: boolean) => void;
 };
 
-export function WhoAmI({ open, people, current, onPick, onOpenChange }: Props) {
+export function WhoAmI({
+  open,
+  people,
+  current,
+  onPick,
+  onAddAndPick,
+  onOpenChange,
+}: Props) {
   const [custom, setCustom] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  function submitCustom() {
+  async function submitCustom() {
     const name = custom.trim();
     if (!name) return;
-    onPick(name);
-    setCustom("");
+    setBusy(true);
+    try {
+      if (onAddAndPick) await onAddAndPick(name);
+      else onPick(name);
+      setCustom("");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -40,7 +55,7 @@ export function WhoAmI({ open, people, current, onPick, onOpenChange }: Props) {
             Who are you?
           </DialogTitle>
           <DialogDescription>
-            We use this to show your list first and stamp your updates. No login.
+            Pick your name from the team, or type it to join the roster. No login.
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-wrap gap-2">
@@ -60,7 +75,7 @@ export function WhoAmI({ open, people, current, onPick, onOpenChange }: Props) {
           className="flex gap-2"
           onSubmit={(event) => {
             event.preventDefault();
-            submitCustom();
+            void submitCustom();
           }}
         >
           <Input
@@ -70,8 +85,8 @@ export function WhoAmI({ open, people, current, onPick, onOpenChange }: Props) {
             className="h-12 text-base"
             autoComplete="name"
           />
-          <Button type="submit" className="h-12 px-4">
-            That’s me
+          <Button type="submit" className="h-12 px-4" disabled={busy}>
+            {busy ? "…" : "That’s me"}
           </Button>
         </form>
         <DialogFooter>

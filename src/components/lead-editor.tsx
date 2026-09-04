@@ -15,12 +15,11 @@ import {
 } from "@/components/ui/sheet";
 import { PersonChip } from "@/components/person-chip";
 import { formatMoney, parseMoney } from "@/lib/money";
-import { uniquePeople } from "@/lib/people";
 import { MONEY_CHIPS, OUTCOME_CHIPS, type Lead } from "@/lib/types";
 
 type Props = {
   lead: Lead | null;
-  leads: Lead[];
+  people: string[];
   me: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -30,7 +29,7 @@ type Props = {
 
 export function LeadEditor({
   lead,
-  leads,
+  people,
   me,
   open,
   onOpenChange,
@@ -43,7 +42,7 @@ export function LeadEditor({
     <LeadEditorForm
       key={lead.id}
       lead={lead}
-      leads={leads}
+      people={people}
       me={me}
       open={open}
       onOpenChange={onOpenChange}
@@ -55,7 +54,7 @@ export function LeadEditor({
 
 function LeadEditorForm({
   lead,
-  leads,
+  people,
   me,
   open,
   onOpenChange,
@@ -67,8 +66,8 @@ function LeadEditorForm({
   const [done, setDone] = useState(lead.done);
   const [committed, setCommitted] = useState(lead.committed ? String(lead.committed) : "");
   const [received, setReceived] = useState(lead.received ? String(lead.received) : "");
+  const [receivedBy, setReceivedBy] = useState(lead.receivedBy ?? me ?? "");
   const leadId = lead.id;
-  const people = uniquePeople(leads);
 
   async function persist(next: {
     outcome?: string;
@@ -76,23 +75,27 @@ function LeadEditorForm({
     done?: boolean;
     committed?: string;
     received?: string;
+    receivedBy?: string;
   }) {
     const nextOutcome = next.outcome ?? outcome;
     const nextAssigned = next.assignedTo ?? assignedTo;
     const nextDone = next.done ?? done;
     const nextCommitted = next.committed ?? committed;
     const nextReceived = next.received ?? received;
+    const nextReceivedBy = next.receivedBy ?? receivedBy;
     setOutcome(nextOutcome);
     setAssignedTo(nextAssigned);
     setDone(nextDone);
     setCommitted(nextCommitted);
     setReceived(nextReceived);
+    setReceivedBy(nextReceivedBy);
     await onSave(leadId, {
       outcome: nextOutcome,
       assignedTo: nextAssigned || null,
       done: nextDone,
       committed: parseMoney(nextCommitted),
       received: parseMoney(nextReceived),
+      receivedBy: nextReceivedBy || null,
       actor: me || undefined,
     });
   }
@@ -194,11 +197,33 @@ function LeadEditorForm({
                 />
               </label>
             </div>
+            <div className="space-y-2">
+              <p className="text-[11px] text-muted-foreground">Who received the money</p>
+              <div className="flex flex-wrap gap-2">
+                {people.map((person) => (
+                  <Button
+                    key={`recv-${person}`}
+                    type="button"
+                    variant={receivedBy === person ? "default" : "outline"}
+                    className="h-10 rounded-full px-3"
+                    onClick={() => persist({ receivedBy: person })}
+                  >
+                    <PersonChip name={person} />
+                  </Button>
+                ))}
+              </div>
+              <Input
+                value={receivedBy}
+                onChange={(event) => setReceivedBy(event.target.value)}
+                placeholder="Collector name"
+                className="h-12 text-base"
+              />
+            </div>
             <Button
               type="button"
               variant="secondary"
               className="h-12 w-full"
-              onClick={() => persist({ committed, received })}
+              onClick={() => persist({ committed, received, receivedBy })}
             >
               Save money
             </Button>

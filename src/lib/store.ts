@@ -9,14 +9,25 @@ import type {
   GuestStatus,
   Lead,
   LeadPatch,
+  Member,
+  MemberPatch,
   Settings,
 } from "@/lib/types";
 
 const LEADS_PATH = path.join(process.cwd(), "data", "leads.json");
 const GUESTS_PATH = path.join(process.cwd(), "data", "guests.json");
+const MEMBERS_PATH = path.join(process.cwd(), "data", "members.json");
 const SETTINGS_PATH = path.join(process.cwd(), "data", "settings.json");
 
 const DEFAULT_SETTINGS: Settings = { moneyTarget: 0, attendanceTarget: 0 };
+const GUEST_STATUS_SET = new Set<GuestStatus>([
+  "not_reached",
+  "reached",
+  "reminded",
+  "maybe",
+  "confirmed",
+  "declined",
+]);
 
 let queue: Promise<unknown> = Promise.resolve();
 
@@ -49,6 +60,7 @@ function normalizeLead(lead: Partial<Lead> & { company: string; id: string }): L
     outcome: lead.outcome ?? "",
     committed: parseMoney(lead.committed),
     received: parseMoney(lead.received),
+    receivedBy: lead.receivedBy?.trim() || null,
     updatedAt: lead.updatedAt ?? null,
     updatedBy: lead.updatedBy ?? null,
   };
@@ -56,19 +68,16 @@ function normalizeLead(lead: Partial<Lead> & { company: string; id: string }): L
 
 function normalizeGuest(guest: Partial<Guest> & { name: string; id: string }): Guest {
   const status = guest.status ?? "not_reached";
-  const allowed: GuestStatus[] = [
-    "not_reached",
-    "reached",
-    "maybe",
-    "confirmed",
-    "declined",
-  ];
   return {
     id: guest.id,
     name: guest.name,
+    phone: guest.phone?.trim() || "",
+    email: guest.email?.trim() || "",
     assignedTo: guest.assignedTo?.trim() || null,
-    status: allowed.includes(status) ? status : "not_reached",
+    status: GUEST_STATUS_SET.has(status) ? status : "not_reached",
     partySize: Math.max(1, parseCount(guest.partySize) || 1),
+    ticketBought: Boolean(guest.ticketBought),
+    lastContactedAt: guest.lastContactedAt ?? null,
     notes: guest.notes ?? "",
     updatedAt: guest.updatedAt ?? null,
     updatedBy: guest.updatedBy ?? null,
@@ -99,6 +108,39 @@ async function writeGuestsFile(guests: Guest[]) {
   await fs.writeFile(GUESTS_PATH, `${JSON.stringify(guests, null, 2)}\n`, "utf8");
 }
 
+function normalizeMember(member: Partial<Member> & { name: string; id: string }): Member {
+  return {
+    id: member.id,
+    name: member.name.trim(),
+    phone: member.phone?.trim() || "",
+    email: member.email?.trim() || "",
+  };
+}
+
+async function readMembersFile(): Promise<Member[]> {
+  try {
+    const raw = await fs.readFile(MEMBERS_PATH, "utf8");
+    const parsed = JSON.parse(raw) as Member[];
+    return parsed
+      .map((member) => normalizeMember(member))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  } catch {
+    return [];
+  }
+}
+
+async function writeMembersFile(members: Member[]) {
+  await fs.writeFile(
+    MEMBERS_PATH,
+    `${JSON.stringify(
+      [...members].sort((a, b) => a.name.localeCompare(b.name)),
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+}
+
 async function readSettingsFile(): Promise<Settings> {
   try {
     const raw = await fs.readFile(SETTINGS_PATH, "utf8");
@@ -124,6 +166,10 @@ export function listGuests(): Promise<Guest[]> {
   return enqueue(readGuestsFile);
 }
 
+export function listMembers(): Promise<Member[]> {
+  return enqueue(readMembersFile);
+}
+
 export function getSettings(): Promise<Settings> {
   return enqueue(readSettingsFile);
 }
@@ -131,11 +177,13 @@ export function getSettings(): Promise<Settings> {
 export function getBoard(): Promise<{
   leads: Lead[];
   guests: Guest[];
+  members: Member[];
   settings: Settings;
 }> {
   return enqueue(async () => ({
     leads: await readLeadsFile(),
     guests: await readGuestsFile(),
+    members: await readMembersFile(),
     settings: await readSettingsFile(),
   }));
 }
@@ -161,6 +209,7 @@ export function createLead(input: {
         outcome: "",
         committed: 0,
         received: 0,
+        receivedBy: null,
         updatedAt: null,
         updatedBy: null,
       }),
@@ -178,6 +227,18 @@ export function patchLead(id: string, patch: LeadPatch): Promise<Lead> {
     const index = leads.findIndex((lead) => lead.id === id);
     if (index === -1) throw new Error("Lead not found");
     const current = leads[index];
+    const received =
+      patch.received === undefined ? current.received : parseMoney(patch.received);
+    let receivedBy =
+      patch.receivedBy === undefined
+        ? current.receivedBy
+        : patch.receivedBy?.trim() || null;
+    if (received > 0 && !receivedBy && patch.actor?.trim()) {
+      receivedBy = patch.actor.trim();
+    }
+    if (received === 0 && patch.received !== undefined) {
+      receivedBy = patch.receivedBy === undefined ? null : receivedBy;
+    }
     const next = stamp(
       normalizeLead({
         ...current,
@@ -190,8 +251,8 @@ export function patchLead(id: string, patch: LeadPatch): Promise<Lead> {
         outcome: patch.outcome === undefined ? current.outcome : patch.outcome,
         committed:
           patch.committed === undefined ? current.committed : parseMoney(patch.committed),
-        received:
-          patch.received === undefined ? current.received : parseMoney(patch.received),
+        received,
+        receivedBy,
       }),
       patch.actor
     );
@@ -225,6 +286,7 @@ export function mergeSheetRows(
             outcome: "",
             committed: 0,
             received: 0,
+            receivedBy: null,
             updatedAt: null,
             updatedBy: null,
           }),
@@ -241,6 +303,8 @@ export function mergeSheetRows(
 
 export function createGuest(input: {
   name: string;
+  phone?: string;
+  email?: string;
   assignedTo?: string | null;
   partySize?: number;
   actor?: string | null;
@@ -256,9 +320,13 @@ export function createGuest(input: {
           guests.map((item) => item.id)
         ),
         name,
+        phone: input.phone ?? "",
+        email: input.email ?? "",
         assignedTo: input.assignedTo?.trim() || null,
         status: "not_reached",
         partySize: input.partySize ?? 1,
+        ticketBought: false,
+        lastContactedAt: null,
         notes: "",
         updatedAt: null,
         updatedBy: null,
@@ -281,12 +349,20 @@ export function patchGuest(id: string, patch: GuestPatch): Promise<Guest> {
       normalizeGuest({
         ...current,
         name: patch.name?.trim() || current.name,
+        phone: patch.phone === undefined ? current.phone : patch.phone,
+        email: patch.email === undefined ? current.email : patch.email,
         assignedTo:
           patch.assignedTo === undefined
             ? current.assignedTo
             : patch.assignedTo?.trim() || null,
         status: patch.status ?? current.status,
         partySize: patch.partySize === undefined ? current.partySize : patch.partySize,
+        ticketBought:
+          patch.ticketBought === undefined ? current.ticketBought : patch.ticketBought,
+        lastContactedAt:
+          patch.lastContactedAt === undefined
+            ? current.lastContactedAt
+            : patch.lastContactedAt,
         notes: patch.notes === undefined ? current.notes : patch.notes,
       }),
       patch.actor
@@ -312,5 +388,69 @@ export function updateSettings(patch: Partial<Settings>): Promise<Settings> {
     };
     await writeSettingsFile(next);
     return next;
+  });
+}
+
+export function createMember(input: {
+  name: string;
+  phone?: string;
+  email?: string;
+}): Promise<Member> {
+  return enqueue(async () => {
+    const name = input.name.trim();
+    if (!name) throw new Error("Name is required");
+    const members = await readMembersFile();
+    const existing = members.find(
+      (member) => member.name.toLowerCase() === name.toLowerCase()
+    );
+    if (existing) return existing;
+    const member = normalizeMember({
+      id: uniqueId(
+        name,
+        members.map((item) => item.id)
+      ),
+      name,
+      phone: input.phone ?? "",
+      email: input.email ?? "",
+    });
+    members.push(member);
+    await writeMembersFile(members);
+    return member;
+  });
+}
+
+export function patchMember(id: string, patch: MemberPatch): Promise<Member> {
+  return enqueue(async () => {
+    const members = await readMembersFile();
+    const index = members.findIndex((member) => member.id === id);
+    if (index === -1) throw new Error("Member not found");
+    const current = members[index];
+    const nextName = patch.name?.trim() || current.name;
+    if (
+      members.some(
+        (member) =>
+          member.id !== id && member.name.toLowerCase() === nextName.toLowerCase()
+      )
+    ) {
+      throw new Error("That name is already on the team");
+    }
+    const next = normalizeMember({
+      ...current,
+      name: nextName,
+      phone: patch.phone === undefined ? current.phone : patch.phone,
+      email: patch.email === undefined ? current.email : patch.email,
+    });
+    members[index] = next;
+    await writeMembersFile(members);
+    return next;
+  });
+}
+
+export function deleteMember(id: string): Promise<void> {
+  return enqueue(async () => {
+    const members = await readMembersFile();
+    const next = members.filter((member) => member.id !== id);
+    if (next.length === members.length) throw new Error("Member not found");
+    await writeMembersFile(next);
   });
 }

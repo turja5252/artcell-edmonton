@@ -5,6 +5,9 @@
     "assignedTo": null,
     "done": false,
     "outcome": "",
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
     "updatedAt": "2026-09-04T17:01:54.713Z",
     "updatedBy": "Tanzim"
   },
@@ -14,6 +17,9 @@
     "assignedTo": "Novel",
     "done": false,
     "outcome": "",
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
     "updatedAt": null,
     "updatedBy": null
   },
@@ -23,6 +29,9 @@
     "assignedTo": "Nick",
     "done": false,
     "outcome": "",
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
     "updatedAt": null,
     "updatedBy": null
   },
@@ -32,6 +41,9 @@
     "assignedTo": "Nick",
     "done": false,
     "outcome": "",
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
     "updatedAt": null,
     "updatedBy": null
   },
@@ -41,17 +53,23 @@
     "assignedTo": "Fahim",
     "done": false,
     "outcome": "",
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
     "updatedAt": null,
     "updatedBy": null
   },
   {
     "id": "chandu-talukdar-cn-tax",
     "company": "Chandu Talukdar - CN Tax",
-    "assignedTo": null,
-    "done": false,
-    "outcome": "",
-    "updatedAt": null,
-    "updatedBy": null
+    "assignedTo": "Tanzim",
+    "done": true,
+    "outcome": "Waiting for reply",
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
+    "updatedAt": "2026-09-04T17:15:26.342Z",
+    "updatedBy": "Tanzim"
   },
   {
     "id": "mahabub-mollah",
@@ -59,6 +77,9 @@
     "assignedTo": "Sathi",
     "done": false,
     "outcome": "",
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
     "updatedAt": null,
     "updatedBy": null
   },
@@ -68,6 +89,9 @@
     "assignedTo": "Khaled",
     "done": false,
     "outcome": "",
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
     "updatedAt": null,
     "updatedBy": null
   },
@@ -77,6 +101,9 @@
     "assignedTo": "Sathi",
     "done": false,
     "outcome": "",
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
     "updatedAt": null,
     "updatedBy": null
   },
@@ -86,6 +113,9 @@
     "assignedTo": "Fahim",
     "done": false,
     "outcome": "",
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
     "updatedAt": null,
     "updatedBy": null
   },
@@ -95,6 +125,9 @@
     "assignedTo": "Wade Engineering",
     "done": false,
     "outcome": "",
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
     "updatedAt": null,
     "updatedBy": null
   },
@@ -104,6 +137,9 @@
     "assignedTo": "Mrs Mizanur Shoma Apa",
     "done": false,
     "outcome": "",
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
     "updatedAt": null,
     "updatedBy": null
   },
@@ -113,6 +149,9 @@
     "assignedTo": "Shenin",
     "done": false,
     "outcome": "",
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
     "updatedAt": null,
     "updatedBy": null
   },
@@ -122,6 +161,9 @@
     "assignedTo": "Tanzim",
     "done": false,
     "outcome": "",
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
     "updatedAt": null,
     "updatedBy": null
   },
@@ -131,6 +173,9 @@
     "assignedTo": "Tanzim",
     "done": false,
     "outcome": "",
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
     "updatedAt": null,
     "updatedBy": null
   },
@@ -140,6 +185,9 @@
     "assignedTo": "Tanzim",
     "done": false,
     "outcome": "",
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
     "updatedAt": null,
     "updatedBy": null
   },
@@ -149,6 +197,9 @@
     "assignedTo": "Tahiat",
     "done": false,
     "outcome": "",
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
     "updatedAt": null,
     "updatedBy": null
   },
@@ -158,6 +209,9 @@
     "assignedTo": "Khaled Bhai",
     "done": false,
     "outcome": "",
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
     "updatedAt": null,
     "updatedBy": null
   },
@@ -167,6 +221,9 @@
     "assignedTo": "Khaled Bhai",
     "done": false,
     "outcome": "",
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
     "updatedAt": null,
     "updatedBy": null
   },
@@ -176,6 +233,9 @@
     "assignedTo": "Khaled Bhai",
     "done": false,
     "outcome": "",
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
     "updatedAt": null,
     "updatedBy": null
   },
@@ -183,10 +243,13 @@
     "id": "realtor-duke-bhai",
     "company": "Realtor Duke Bhai",
     "assignedTo": "Khaled Bhai",
-    "done": false,
+    "done": true,
     "outcome": "",
-    "updatedAt": null,
-    "updatedBy": null
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
+    "updatedAt": "2026-09-04T17:21:44.142Z",
+    "updatedBy": "Khaled Bhai"
   },
   {
     "id": "physio",
@@ -194,6 +257,9 @@
     "assignedTo": "Khaled Bhai",
     "done": false,
     "outcome": "",
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
     "updatedAt": null,
     "updatedBy": null
   },
@@ -203,6 +269,9 @@
     "assignedTo": "Sathi",
     "done": false,
     "outcome": "",
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
     "updatedAt": null,
     "updatedBy": null
   },
@@ -212,6 +281,9 @@
     "assignedTo": "Sathi",
     "done": false,
     "outcome": "",
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
     "updatedAt": null,
     "updatedBy": null
   },
@@ -221,6 +293,9 @@
     "assignedTo": "Sathi",
     "done": false,
     "outcome": "",
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
     "updatedAt": null,
     "updatedBy": null
   },
@@ -230,6 +305,9 @@
     "assignedTo": "Tanvir/Tajul Bhai",
     "done": false,
     "outcome": "",
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
     "updatedAt": null,
     "updatedBy": null
   },
@@ -239,6 +317,9 @@
     "assignedTo": "Raiyan",
     "done": false,
     "outcome": "",
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
     "updatedAt": null,
     "updatedBy": null
   },
@@ -248,6 +329,9 @@
     "assignedTo": "Shuddho",
     "done": false,
     "outcome": "",
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
     "updatedAt": null,
     "updatedBy": null
   },
@@ -257,6 +341,9 @@
     "assignedTo": "Fahim",
     "done": false,
     "outcome": "",
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
     "updatedAt": null,
     "updatedBy": null
   },
@@ -266,6 +353,9 @@
     "assignedTo": "Fahim",
     "done": false,
     "outcome": "",
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
     "updatedAt": null,
     "updatedBy": null
   },
@@ -275,6 +365,9 @@
     "assignedTo": "Fahim",
     "done": false,
     "outcome": "",
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
     "updatedAt": null,
     "updatedBy": null
   },
@@ -284,6 +377,9 @@
     "assignedTo": "Shenin",
     "done": false,
     "outcome": "",
+    "committed": 0,
+    "received": 0,
+    "receivedBy": null,
     "updatedAt": null,
     "updatedBy": null
   }

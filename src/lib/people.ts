@@ -1,4 +1,8 @@
-type Named = { assignedTo?: string | null; updatedBy?: string | null };
+type Named = {
+  assignedTo?: string | null;
+  updatedBy?: string | null;
+  receivedBy?: string | null;
+};
 
 export function uniquePeople(...lists: Named[][]): string[] {
   const names = new Set<string>();
@@ -6,6 +10,7 @@ export function uniquePeople(...lists: Named[][]): string[] {
     for (const item of list) {
       if (item.assignedTo) names.add(item.assignedTo);
       if (item.updatedBy) names.add(item.updatedBy);
+      if (item.receivedBy) names.add(item.receivedBy);
     }
   }
   return [...names].sort((a, b) => a.localeCompare(b));

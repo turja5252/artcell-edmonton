@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
 
-import { createGuest, listGuests } from "@/lib/store";
+import { createMember, listMembers } from "@/lib/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const guests = await listGuests();
-    return NextResponse.json({ guests });
+    const members = await listMembers();
+    return NextResponse.json({ members });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to load guests";
+    const message = error instanceof Error ? error.message : "Failed to load members";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -21,21 +21,15 @@ export async function POST(request: Request) {
       name?: string;
       phone?: string;
       email?: string;
-      assignedTo?: string | null;
-      partySize?: number;
-      actor?: string | null;
     };
-    const guest = await createGuest({
+    const member = await createMember({
       name: body.name ?? "",
       phone: body.phone,
       email: body.email,
-      assignedTo: body.assignedTo,
-      partySize: body.partySize,
-      actor: body.actor,
     });
-    return NextResponse.json({ guest }, { status: 201 });
+    return NextResponse.json({ member }, { status: 201 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to add guest";
+    const message = error instanceof Error ? error.message : "Failed to add member";
     const status = message.includes("required") ? 400 : 500;
     return NextResponse.json({ error: message }, { status });
   }
