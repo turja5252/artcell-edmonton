@@ -1,6 +1,6 @@
 # Artcell Edmonton Show
 
-Phone board and Excel workbook for the Artcell Edmonton concert team. Starts from the [sponsor search list](https://docs.google.com/spreadsheets/d/1v85LqFr8duSQ-eG0rvwGZtf_v-n4SZoL3xbgDe8itsI).
+Phone board for the Artcell Edmonton concert team. Starts from the [sponsor search list](https://docs.google.com/spreadsheets/d/1v85LqFr8duSQ-eG0rvwGZtf_v-n4SZoL3xbgDe8itsI).
 
 ## Phone board
 
@@ -10,30 +10,24 @@ Phone board and Excel workbook for the Artcell Edmonton concert team. Starts fro
 - **Team** — add organizers to the roster; they appear in “Who are you?” and assignment lists.
 - **Songs** — setlist cues.
 
-Anyone with the link can tap. No login. The spreadsheet icon downloads the Excel file for Microsoft 365.
+Anyone with the link can tap. No login.
 
-## Excel for Microsoft 365
+## Share with phones (public host)
 
-If the crew already lives in OneDrive / Teams, Excel is the simpler shared ledger:
+The app must be on a public URL (not `localhost`) for the group chat.
 
-1. Download [Artcell-Edmonton-Show.xlsx](./Artcell-Edmonton-Show.xlsx) (also served at `/Artcell-Edmonton-Show.xlsx`).
-2. Upload it to OneDrive. Share → anyone with the link can edit (or your org only).
-3. Paste that link in the group chat. On a phone, open it in the Excel app.
-4. Yellow cells are for typing. Gray cells are running totals.
+**Fastest permanent path**
 
-Sheets inside the file:
+1. Click **Create repo** in Cursor so this project is on GitHub.
+2. Sign up at [vercel.com](https://vercel.com) with that GitHub account (free).
+3. Import this repo → Deploy.
+4. Send the `*.vercel.app` link in the group chat.
 
-| Sheet | What it does |
-| --- | --- |
-| Dashboard | Target, committed, received, remaining, confirmed seats, remaining seats |
-| Sponsors | The 32 companies plus $ committed / received |
-| Attendance | Invite list with status and seat count |
-| Setlist | Cues with YouTube timestamps |
-| How to share | The same steps as above |
+**Important:** Vercel’s free plan does not keep file writes after a restart. For a concert team where everyone edits the same board, we should add a free database (Turso or Neon) before/at deploy so pledges and invites stick. Say the word and I’ll wire that in.
 
-The website and the Excel file are **not linked**. Pick one source of truth, or copy numbers across if you use both.
+A temporary Cloudflare tunnel can also expose this agent’s copy while the session is running — that link dies when the agent stops.
 
-## Run the phone board
+## Run locally
 
 ```bash
 npm install
@@ -47,8 +41,4 @@ npm run build
 npm start
 ```
 
-To rebuild the Excel file after changing names or cues:
-
-```bash
-python3 scripts/build-excel.py
-```
+Optional Excel export still lives at `/Artcell-Edmonton-Show.xlsx` if someone wants an offline copy — the phone board is the main product.
