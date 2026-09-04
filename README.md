@@ -13,6 +13,13 @@ GitHub: [turja5252/artcell-edmonton](https://github.com/turja5252/artcell-edmont
 
 Anyone with the link can tap. No login. Roster edits require picking **Admin** — the first, full-width choice on the identity picker.
 
+## Install as an app
+
+Open [artcell-edmonton.vercel.app](https://artcell-edmonton.vercel.app) in the phone browser, then:
+
+- **iPhone (Safari):** Share → **Add to Home Screen** → Add. The board opens full-screen as **Artcell**.
+- **Android (Chrome):** tap **Install** on the banner, or the menu → **Install app** / **Add to Home Screen**.
+
 ## Permanent hosting (Vercel)
 
 This is the lasting public phone URL for the team.
