@@ -398,11 +398,11 @@ function LeadEditorForm({
           <Button
             type="button"
             className="h-12 w-full text-base"
-            variant={done ? "outline" : "default"}
+            variant={done ? "outline" : "secondary"}
             disabled={busy || deleting}
             onClick={() => persist({ done: !done })}
           >
-            {done ? "Mark still open" : "Mark done"}
+            {done ? "Reopen" : "Mark completed"}
           </Button>
           {onDelete ? (
             confirmDelete ? (

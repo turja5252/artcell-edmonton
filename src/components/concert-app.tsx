@@ -647,7 +647,7 @@ export function ConcertApp({
     { id: "mine", label: me ? `${me.split(" ")[0]}` : "Mine", count: me ? leads.filter((l) => samePerson(l.assignedTo, me)).length : 0 },
     { id: "open", label: "Open", count: openCount },
     { id: "unassigned", label: "Need owner", count: unassignedCount },
-    { id: "done", label: "Done", count: doneCount },
+    { id: "done", label: "Completed", count: doneCount },
     { id: "all", label: "All", count: leads.length },
   ];
 
@@ -1109,7 +1109,7 @@ function LeadCard({
               ) : null}
               {lead.done ? (
                 <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-300">
-                  Done
+                  Completed
                 </span>
               ) : null}
               {lead.committed > 0 ? (
@@ -1160,7 +1160,7 @@ function LeadCard({
           onClick={onToggleDone}
         >
           <Check className="size-4" />
-          {lead.done ? "Undo" : "Mark done"}
+          {lead.done ? "Reopen" : "Mark completed"}
         </Button>
       </div>
     </article>
@@ -1204,9 +1204,9 @@ function EmptyState({
   if (filter === "done") {
     return (
       <div className="mt-8 rounded-2xl border border-dashed border-border p-6 text-center">
-        <p className="font-medium">No one marked done yet</p>
+        <p className="font-medium">No one marked completed yet</p>
         <p className="mt-1 text-sm text-muted-foreground">
-          After you call, tap Mark done and leave what they said.
+          After you call, tap Mark completed when there is nothing left to do.
         </p>
       </div>
     );
