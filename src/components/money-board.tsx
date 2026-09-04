@@ -141,7 +141,9 @@ export function MoneyBoard({ leads, members, target, onSetTarget, onOpenLead }: 
                   </span>
                   {lead.received > 0 ? (
                     <span className="text-xs text-muted-foreground">
-                      received {formatMoney(lead.received)}
+                      {lead.receivedBy
+                        ? `${lead.receivedBy.split(" ")[0]} collected ${formatMoney(lead.received)}`
+                        : `received ${formatMoney(lead.received)}`}
                     </span>
                   ) : null}
                 </span>

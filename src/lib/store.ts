@@ -301,27 +301,30 @@ export function patchLead(id: string, patch: LeadPatch): Promise<Lead> {
     const current = leads[index];
     const members = await readMembersFile();
     const allowedNames = members.map((member) => member.name);
+    const assignedTo =
+      patch.assignedTo === undefined
+        ? resolveAssignee(current.assignedTo, allowedNames)
+        : resolveAssignee(patch.assignedTo, allowedNames);
     const received =
       patch.received === undefined ? current.received : parseMoney(patch.received);
     let receivedBy =
       patch.receivedBy === undefined
         ? current.receivedBy
         : patch.receivedBy?.trim() || null;
-    if (received > 0 && !receivedBy && patch.actor?.trim()) {
-      receivedBy = patch.actor.trim();
-    }
     if (received === 0 && patch.received !== undefined) {
       receivedBy = patch.receivedBy === undefined ? null : receivedBy;
     }
     receivedBy = resolveAssignee(receivedBy, allowedNames);
+    // Money in: default collector to whoever is on the lead, then the actor.
+    // Never rewrite an explicit receivedBy that already resolved.
+    if (received > 0 && !receivedBy) {
+      receivedBy = assignedTo || resolveAssignee(patch.actor, allowedNames);
+    }
     const next = stamp(
       normalizeLead({
         ...current,
         company: patch.company?.trim() || current.company,
-        assignedTo:
-          patch.assignedTo === undefined
-            ? resolveAssignee(current.assignedTo, allowedNames)
-            : resolveAssignee(patch.assignedTo, allowedNames),
+        assignedTo,
         done: patch.done ?? current.done,
         outcome: patch.outcome === undefined ? current.outcome : patch.outcome,
         committed:

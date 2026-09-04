@@ -19,6 +19,14 @@ import { formatMoney, parseMoney } from "@/lib/money";
 import { isTeamAdmin } from "@/lib/team-admin";
 import { MONEY_CHIPS, OUTCOME_CHIPS, type Lead } from "@/lib/types";
 
+function defaultCollector(assignedTo: string, me: string): string {
+  const assigned = assignedTo.trim();
+  if (assigned) return assigned;
+  const actor = me.trim();
+  if (actor && !isTeamAdmin(actor)) return actor;
+  return "";
+}
+
 type Props = {
   lead: Lead | null;
   people: string[];
@@ -77,7 +85,12 @@ function LeadEditorForm({
   const [done, setDone] = useState(lead.done);
   const [committed, setCommitted] = useState(lead.committed ? String(lead.committed) : "");
   const [received, setReceived] = useState(lead.received ? String(lead.received) : "");
-  const [receivedBy, setReceivedBy] = useState(lead.receivedBy ?? me ?? "");
+  const [receivedBy, setReceivedBy] = useState(() => {
+    if (lead.receivedBy) return lead.receivedBy;
+    if (lead.received > 0) return defaultCollector(lead.assignedTo ?? "", me);
+    return "";
+  });
+  const [receivedByTouched, setReceivedByTouched] = useState(Boolean(lead.receivedBy));
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const leadId = lead.id;
@@ -97,7 +110,17 @@ function LeadEditorForm({
     const nextDone = next.done ?? done;
     const nextCommitted = next.committed ?? committed;
     const nextReceived = next.received ?? received;
-    const nextReceivedBy = next.receivedBy ?? receivedBy;
+    let nextReceivedBy = next.receivedBy ?? receivedBy;
+    const parsedReceived = parseMoney(nextReceived);
+    if (parsedReceived > 0) {
+      if (!receivedByTouched) {
+        nextReceivedBy = defaultCollector(nextAssigned, me);
+      } else {
+        nextReceivedBy = nextReceivedBy.trim() || defaultCollector(nextAssigned, me);
+      }
+    } else if (next.received !== undefined) {
+      nextReceivedBy = "";
+    }
     setCompany(nextCompany);
     setOutcome(nextOutcome);
     setAssignedTo(nextAssigned);
@@ -111,8 +134,8 @@ function LeadEditorForm({
       assignedTo: nextAssigned || null,
       done: nextDone,
       committed: parseMoney(nextCommitted),
-      received: parseMoney(nextReceived),
-      receivedBy: nextReceivedBy || null,
+      received: parsedReceived,
+      receivedBy: parsedReceived > 0 ? nextReceivedBy || null : null,
       actor: me || undefined,
     });
   }
@@ -229,7 +252,16 @@ function LeadEditorForm({
                 <span className="mb-1 block text-[11px] text-muted-foreground">Received</span>
                 <Input
                   value={received}
-                  onChange={(event) => setReceived(event.target.value)}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setReceived(value);
+                    if (parseMoney(value) > 0 && !receivedByTouched) {
+                      setReceivedBy(defaultCollector(assignedTo, me));
+                    }
+                    if (parseMoney(value) === 0 && !lead.receivedBy && !receivedByTouched) {
+                      setReceivedBy("");
+                    }
+                  }}
                   inputMode="decimal"
                   placeholder="0"
                   className="h-12 text-base"
@@ -237,24 +269,34 @@ function LeadEditorForm({
               </label>
             </div>
             <div className="space-y-2">
-              <p className="text-[11px] text-muted-foreground">Who received the money</p>
+              <p className="text-[11px] text-muted-foreground">
+                Who received the money — starts as whoever is on this
+              </p>
               <div className="flex flex-wrap gap-2">
-                {people.map((person) => (
-                  <Button
-                    key={`recv-${person}`}
-                    type="button"
-                    variant={receivedBy === person ? "default" : "outline"}
-                    className="h-10 rounded-full px-3"
-                    onClick={() => persist({ receivedBy: person })}
-                  >
-                    <PersonChip name={person} />
-                  </Button>
-                ))}
+                {people
+                  .filter((person) => !isTeamAdmin(person))
+                  .map((person) => (
+                    <Button
+                      key={`recv-${person}`}
+                      type="button"
+                      variant={receivedBy === person ? "default" : "outline"}
+                      className="h-10 rounded-full px-3"
+                      onClick={() => {
+                        setReceivedByTouched(true);
+                        void persist({ receivedBy: person });
+                      }}
+                    >
+                      <PersonChip name={person} />
+                    </Button>
+                  ))}
               </div>
               <Input
                 value={receivedBy}
-                onChange={(event) => setReceivedBy(event.target.value)}
-                placeholder="Collector name"
+                onChange={(event) => {
+                  setReceivedByTouched(true);
+                  setReceivedBy(event.target.value);
+                }}
+                placeholder="Whoever is on this, unless you change it"
                 className="h-12 text-base"
               />
             </div>
