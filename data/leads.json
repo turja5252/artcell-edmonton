@@ -108,18 +108,6 @@
     "updatedBy": null
   },
   {
-    "id": "dominion-landing",
-    "company": "Dominion Landing",
-    "assignedTo": "Fahim",
-    "done": false,
-    "outcome": "",
-    "committed": 0,
-    "received": 0,
-    "receivedBy": null,
-    "updatedAt": null,
-    "updatedBy": null
-  },
-  {
     "id": "raiyans-company",
     "company": "Raiyan's Company",
     "assignedTo": "Raiyan",

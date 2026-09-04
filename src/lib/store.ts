@@ -332,38 +332,105 @@ export function createGuest(input: {
   actor?: string | null;
 }): Promise<Guest> {
   return enqueue(async () => {
-    const firstName = input.firstName?.trim() || "";
-    const lastName = input.lastName?.trim() || "";
-    const name =
-      `${firstName} ${lastName}`.trim() || input.name?.trim() || "";
-    if (!name) throw new Error("Name is required");
     const guests = await readGuestsFile();
-    const guest = stamp(
-      normalizeGuest({
-        id: uniqueId(
-          name,
-          guests.map((item) => item.id)
-        ),
-        firstName,
-        lastName,
-        name,
-        phone: input.phone ?? "",
-        email: input.email ?? "",
-        assignedTo: input.assignedTo?.trim() || null,
-        status: "not_called",
-        partySize: input.partySize ?? 1,
-        ticketBought: false,
-        lastContactedAt: null,
-        notes: "",
-        updatedAt: null,
-        updatedBy: null,
-      }),
-      input.actor
-    );
+    const guest = buildGuest(input, guests);
     guests.push(guest);
     await writeGuestsFile(guests);
     return guest;
   });
+}
+
+export function createGuests(
+  inputs: {
+    name?: string;
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    email?: string;
+    assignedTo?: string | null;
+    partySize?: number;
+  }[],
+  actor?: string | null
+): Promise<{ guests: Guest[]; added: number; skipped: number }> {
+  return enqueue(async () => {
+    if (!inputs.length) throw new Error("No contacts to add");
+    const guests = await readGuestsFile();
+    const existingKeys = new Set(
+      guests.map(
+        (guest) =>
+          `${guest.firstName}|${guest.lastName}|${guest.phone.replace(/\D/g, "")}`.toLowerCase()
+      )
+    );
+    const created: Guest[] = [];
+    let skipped = 0;
+    for (const input of inputs) {
+      const firstName = input.firstName?.trim() || "";
+      const lastName = input.lastName?.trim() || "";
+      const name = `${firstName} ${lastName}`.trim() || input.name?.trim() || "";
+      if (!name) {
+        skipped += 1;
+        continue;
+      }
+      const phone = input.phone?.trim() || "";
+      const key = `${firstName}|${lastName}|${phone.replace(/\D/g, "")}`.toLowerCase();
+      if (existingKeys.has(key)) {
+        skipped += 1;
+        continue;
+      }
+      const guest = buildGuest(
+        { ...input, firstName, lastName, name, phone, actor },
+        [...guests, ...created]
+      );
+      created.push(guest);
+      existingKeys.add(key);
+    }
+    if (created.length) {
+      guests.push(...created);
+      await writeGuestsFile(guests);
+    }
+    return { guests: created, added: created.length, skipped };
+  });
+}
+
+function buildGuest(
+  input: {
+    name?: string;
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    email?: string;
+    assignedTo?: string | null;
+    partySize?: number;
+    actor?: string | null;
+  },
+  existing: Guest[]
+): Guest {
+  const firstName = input.firstName?.trim() || "";
+  const lastName = input.lastName?.trim() || "";
+  const name = `${firstName} ${lastName}`.trim() || input.name?.trim() || "";
+  if (!name) throw new Error("Name is required");
+  return stamp(
+    normalizeGuest({
+      id: uniqueId(
+        name,
+        existing.map((item) => item.id)
+      ),
+      firstName,
+      lastName,
+      name,
+      phone: input.phone ?? "",
+      email: input.email ?? "",
+      assignedTo: input.assignedTo?.trim() || null,
+      status: "not_called",
+      partySize: input.partySize ?? 1,
+      ticketBought: false,
+      lastContactedAt: null,
+      notes: "",
+      updatedAt: null,
+      updatedBy: null,
+    }),
+    input.actor
+  );
 }
 
 export function patchGuest(id: string, patch: GuestPatch): Promise<Guest> {

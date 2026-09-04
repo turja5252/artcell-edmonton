@@ -3822,5 +3822,37 @@
     "notes": "",
     "updatedAt": null,
     "updatedBy": null
+  },
+  {
+    "id": "nusrat-rahman",
+    "firstName": "Nusrat",
+    "lastName": "Rahman",
+    "name": "Nusrat Rahman",
+    "phone": "(780) 555-0101",
+    "email": "nusrat.demo@example.com",
+    "assignedTo": null,
+    "status": "not_called",
+    "partySize": 1,
+    "ticketBought": false,
+    "lastContactedAt": null,
+    "notes": "",
+    "updatedAt": "2026-09-04T19:43:52.150Z",
+    "updatedBy": "Tester"
+  },
+  {
+    "id": "imran-khan",
+    "firstName": "Imran",
+    "lastName": "Khan",
+    "name": "Imran Khan",
+    "phone": "(780) 555-0199",
+    "email": "",
+    "assignedTo": null,
+    "status": "not_called",
+    "partySize": 1,
+    "ticketBought": false,
+    "lastContactedAt": null,
+    "notes": "",
+    "updatedAt": "2026-09-04T19:43:52.150Z",
+    "updatedBy": "Tester"
   }
 ]

@@ -7,7 +7,7 @@ GitHub: [turja5252/artcell-edmonton](https://github.com/turja5252/artcell-edmont
 
 - **Calls** — claim a company, mark done, leave what happened
 - **Money** — target, pledged, received
-- **Seats** — call list with first/last name, phone, email, team assignment, Call button, and confirmed / tentative / declined + member count
+- **Seats** — call list with first/last name, phone, email, team assignment, Call button, confirmed / tentative / declined + member count. Add people manually, from Android phone contacts (Chrome), or by importing a .vcf / .csv (iPhone & Android).
 - **Team** — add organizers
 - **Songs** — setlist cues
 

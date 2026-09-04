@@ -359,6 +359,36 @@ export function ConcertApp({
     setToast(`${displayGuestName(data.guest ?? input)} is on the call list`);
   }
 
+  async function addGuests(inputs: AddGuestInput[]) {
+    const response = await fetch("/api/guests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ guests: inputs, actor: me }),
+    });
+    const data = (await response.json()) as {
+      guests?: Guest[];
+      added?: number;
+      skipped?: number;
+      error?: string;
+    };
+    if (!response.ok) throw new Error(data.error || "Could not add contacts");
+    if (data.guests?.length) {
+      setGuests((current) => [...current, ...data.guests!]);
+    }
+    const added = data.added ?? data.guests?.length ?? 0;
+    const skipped = data.skipped ?? 0;
+    if (added) {
+      setToast(
+        skipped
+          ? `Added ${added} from your phone · skipped ${skipped} duplicates`
+          : `Added ${added} from your phone`
+      );
+    } else if (skipped) {
+      setToast("Those contacts are already on the list");
+    }
+    return { added, skipped };
+  }
+
   async function saveSettings(patch: Partial<Settings>) {
     const next = { ...settings, ...patch };
     setSettings(next);
@@ -718,6 +748,7 @@ export function ConcertApp({
         people={people}
         onOpenChange={setAddGuestOpen}
         onAdd={addGuest}
+        onAddMany={addGuests}
       />
       <LeadEditor
         lead={active}

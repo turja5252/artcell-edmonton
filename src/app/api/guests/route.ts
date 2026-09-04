@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { createGuest, listGuests } from "@/lib/store";
+import { createGuest, createGuests, listGuests } from "@/lib/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,7 +26,22 @@ export async function POST(request: Request) {
       assignedTo?: string | null;
       partySize?: number;
       actor?: string | null;
+      guests?: {
+        name?: string;
+        firstName?: string;
+        lastName?: string;
+        phone?: string;
+        email?: string;
+        assignedTo?: string | null;
+        partySize?: number;
+      }[];
     };
+
+    if (Array.isArray(body.guests)) {
+      const result = await createGuests(body.guests, body.actor);
+      return NextResponse.json(result, { status: 201 });
+    }
+
     const guest = await createGuest({
       name: body.name ?? "",
       firstName: body.firstName,
@@ -40,7 +55,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ guest }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to add guest";
-    const status = message.includes("required") ? 400 : 500;
+    const status = message.includes("required") || message.includes("No contacts") ? 400 : 500;
     return NextResponse.json({ error: message }, { status });
   }
 }
