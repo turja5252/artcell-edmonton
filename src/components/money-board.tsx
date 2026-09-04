@@ -3,17 +3,17 @@
 import { PersonChip } from "@/components/person-chip";
 import { formatMoney } from "@/lib/money";
 import type { Lead } from "@/lib/types";
-import { uniquePeople } from "@/lib/people";
 import { cn } from "@/lib/utils";
 
 type Props = {
   leads: Lead[];
+  members: { name: string }[];
   target: number;
   onSetTarget: () => void;
   onOpenLead: (lead: Lead) => void;
 };
 
-export function MoneyBoard({ leads, target, onSetTarget, onOpenLead }: Props) {
+export function MoneyBoard({ leads, members, target, onSetTarget, onOpenLead }: Props) {
   const committed = leads.reduce((sum, lead) => sum + lead.committed, 0);
   const received = leads.reduce((sum, lead) => sum + lead.received, 0);
   const remaining = Math.max(0, target - committed);
@@ -21,14 +21,17 @@ export function MoneyBoard({ leads, target, onSetTarget, onOpenLead }: Props) {
   const pledgedCount = leads.filter((lead) => lead.committed > 0).length;
   const percent = target > 0 ? Math.min(100, Math.round((committed / target) * 100)) : 0;
 
-  const people = uniquePeople(leads).map((name) => {
-    const mine = leads.filter((lead) => lead.assignedTo === name);
-    return {
-      name,
-      committed: mine.reduce((sum, lead) => sum + lead.committed, 0),
-      received: mine.reduce((sum, lead) => sum + lead.received, 0),
-    };
-  }).sort((a, b) => b.committed - a.committed);
+  const people = members
+    .map((member) => {
+      const mine = leads.filter((lead) => lead.assignedTo === member.name);
+      return {
+        name: member.name,
+        committed: mine.reduce((sum, lead) => sum + lead.committed, 0),
+        received: mine.reduce((sum, lead) => sum + lead.received, 0),
+      };
+    })
+    .filter((row) => row.committed > 0 || row.received > 0)
+    .sort((a, b) => b.committed - a.committed);
 
   const ranked = [...leads].sort(
     (a, b) => b.committed - a.committed || a.company.localeCompare(b.company)

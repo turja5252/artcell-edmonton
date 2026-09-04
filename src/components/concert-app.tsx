@@ -37,7 +37,7 @@ import { WhoAmI } from "@/components/who-am-i";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatMoney } from "@/lib/money";
-import { formatTime, uniquePeople } from "@/lib/people";
+import { formatTime } from "@/lib/people";
 import type { Guest, GuestStatus, Lead, Member, Settings } from "@/lib/types";
 import { displayGuestName } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -117,11 +117,10 @@ export function ConcertApp({
   const [targetKind, setTargetKind] = useState<"money" | "seats" | null>(null);
   const [ticketsOpen, setTicketsOpen] = useState(false);
 
-  const people = useMemo(() => {
-    const names = new Set(members.map((member) => member.name));
-    for (const name of uniquePeople(leads, guests)) names.add(name);
-    return [...names].sort((a, b) => a.localeCompare(b));
-  }, [members, leads, guests]);
+  const people = useMemo(
+    () => members.map((member) => member.name).sort((a, b) => a.localeCompare(b)),
+    [members]
+  );
 
   const load = useCallback(async () => {
     const response = await fetch("/api/board", { cache: "no-store" });
@@ -209,10 +208,20 @@ export function ConcertApp({
   }
 
   async function removeMember(id: string) {
+    const removed = members.find((member) => member.id === id);
     const response = await fetch(`/api/members/${id}`, { method: "DELETE" });
-    const data = (await response.json()) as { error?: string };
+    const data = (await response.json()) as {
+      members?: Member[];
+      leads?: Lead[];
+      guests?: Guest[];
+      error?: string;
+    };
     if (!response.ok) throw new Error(data.error || "Could not remove member");
-    setMembers((current) => current.filter((member) => member.id !== id));
+    if (data.members) setMembers(data.members);
+    else setMembers((current) => current.filter((member) => member.id !== id));
+    if (data.leads) setLeads(data.leads);
+    if (data.guests) setGuests(data.guests);
+    if (removed && me === removed.name) writeMe("");
     setToast("Removed from the team");
   }
 
@@ -665,6 +674,7 @@ export function ConcertApp({
         <section className="mt-5 flex-1">
           <MoneyBoard
             leads={leads}
+            members={members}
             target={settings.moneyTarget}
             onSetTarget={() => setTargetKind("money")}
             onOpenLead={(lead) => setActive(lead)}

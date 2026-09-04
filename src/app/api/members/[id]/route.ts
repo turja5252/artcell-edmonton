@@ -32,8 +32,8 @@ export async function DELETE(
 ) {
   try {
     const { id } = await context.params;
-    await deleteMember(id);
-    return NextResponse.json({ ok: true });
+    const result = await deleteMember(id);
+    return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to remove";
     const status = message.includes("not found") ? 404 : 500;

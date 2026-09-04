@@ -202,12 +202,27 @@ export function getBoard(): Promise<{
   members: Member[];
   settings: Settings;
 }> {
-  return enqueue(async () => ({
-    leads: await readLeadsFile(),
-    guests: await readGuestsFile(),
-    members: await readMembersFile(),
-    settings: await readSettingsFile(),
-  }));
+  return enqueue(async () => {
+    const members = await readMembersFile();
+    const allowed = new Set(members.map((member) => member.name));
+    const leadsRaw = await readLeadsFile();
+    const guestsRaw = await readGuestsFile();
+    const leads = clearMissingLeadAssignees(leadsRaw, allowed);
+    const guests = clearMissingGuestAssignees(guestsRaw, allowed);
+    if (
+      leads.some((lead, index) => lead !== leadsRaw[index]) ||
+      guests.some((guest, index) => guest !== guestsRaw[index])
+    ) {
+      await writeLeadsFile(leads);
+      await writeGuestsFile(guests);
+    }
+    return {
+      leads,
+      guests,
+      members,
+      settings: await readSettingsFile(),
+    };
+  });
 }
 
 export function createLead(input: {
@@ -711,11 +726,39 @@ export function patchMember(id: string, patch: MemberPatch): Promise<Member> {
   });
 }
 
-export function deleteMember(id: string): Promise<void> {
+export function deleteMember(id: string): Promise<{
+  members: Member[];
+  leads: Lead[];
+  guests: Guest[];
+}> {
   return enqueue(async () => {
     const members = await readMembersFile();
-    const next = members.filter((member) => member.id !== id);
-    if (next.length === members.length) throw new Error("Member not found");
-    await writeMembersFile(next);
+    const target = members.find((member) => member.id === id);
+    if (!target) throw new Error("Member not found");
+    const nextMembers = members.filter((member) => member.id !== id);
+    await writeMembersFile(nextMembers);
+
+    const allowed = new Set(nextMembers.map((member) => member.name));
+    const leads = clearMissingLeadAssignees(await readLeadsFile(), allowed);
+    const guests = clearMissingGuestAssignees(await readGuestsFile(), allowed);
+    await writeLeadsFile(leads);
+    await writeGuestsFile(guests);
+
+    return { members: nextMembers, leads, guests };
   });
+}
+
+function clearMissingLeadAssignees(leads: Lead[], allowed: Set<string>): Lead[] {
+  return leads.map((lead) => ({
+    ...lead,
+    assignedTo: lead.assignedTo && allowed.has(lead.assignedTo) ? lead.assignedTo : null,
+    receivedBy: lead.receivedBy && allowed.has(lead.receivedBy) ? lead.receivedBy : null,
+  }));
+}
+
+function clearMissingGuestAssignees(guests: Guest[], allowed: Set<string>): Guest[] {
+  return guests.map((guest) => ({
+    ...guest,
+    assignedTo: guest.assignedTo && allowed.has(guest.assignedTo) ? guest.assignedTo : null,
+  }));
 }
