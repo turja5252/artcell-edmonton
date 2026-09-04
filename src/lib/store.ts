@@ -543,6 +543,55 @@ export function patchMember(id: string, patch: MemberPatch): Promise<Member> {
     });
     members[index] = next;
     await writeMembersFile(members);
+
+    if (next.name !== current.name) {
+      const leads = await readLeadsFile();
+      let leadsChanged = false;
+      for (let i = 0; i < leads.length; i++) {
+        const lead = leads[i];
+        let changed = false;
+        const updated = { ...lead };
+        if (lead.assignedTo === current.name) {
+          updated.assignedTo = next.name;
+          changed = true;
+        }
+        if (lead.receivedBy === current.name) {
+          updated.receivedBy = next.name;
+          changed = true;
+        }
+        if (lead.updatedBy === current.name) {
+          updated.updatedBy = next.name;
+          changed = true;
+        }
+        if (changed) {
+          leads[i] = updated;
+          leadsChanged = true;
+        }
+      }
+      if (leadsChanged) await writeLeadsFile(leads);
+
+      const guests = await readGuestsFile();
+      let guestsChanged = false;
+      for (let i = 0; i < guests.length; i++) {
+        const guest = guests[i];
+        let changed = false;
+        const updated = { ...guest };
+        if (guest.assignedTo === current.name) {
+          updated.assignedTo = next.name;
+          changed = true;
+        }
+        if (guest.updatedBy === current.name) {
+          updated.updatedBy = next.name;
+          changed = true;
+        }
+        if (changed) {
+          guests[i] = updated;
+          guestsChanged = true;
+        }
+      }
+      if (guestsChanged) await writeGuestsFile(guests);
+    }
+
     return next;
   });
 }

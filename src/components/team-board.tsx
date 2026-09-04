@@ -1,11 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { Phone, Plus, Trash2 } from "lucide-react";
+import { Pencil, Phone, Plus, Trash2 } from "lucide-react";
 
 import { PersonChip } from "@/components/person-chip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import type { Guest, Lead, Member } from "@/lib/types";
 
 type Props = {
@@ -14,6 +22,10 @@ type Props = {
   guests: Guest[];
   onFilterPerson: (name: string) => void;
   onAdd: (input: { name: string; phone?: string; email?: string }) => Promise<void>;
+  onSave: (
+    id: string,
+    input: { name: string; phone?: string; email?: string }
+  ) => Promise<void>;
   onRemove: (id: string) => Promise<void>;
 };
 
@@ -23,6 +35,7 @@ export function TeamBoard({
   guests,
   onFilterPerson,
   onAdd,
+  onSave,
   onRemove,
 }: Props) {
   const [name, setName] = useState("");
@@ -31,6 +44,7 @@ export function TeamBoard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<Member | null>(null);
 
   const openUnassigned = leads.filter((lead) => !lead.assignedTo && !lead.done);
 
@@ -77,7 +91,7 @@ export function TeamBoard({
     <div className="space-y-3 pb-24">
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          Add organizers here. They show up when people pick “who are you?” and when you assign calls.
+          Add organizers here. Tap Edit on anyone to change name, phone, or email.
         </p>
         <Button
           type="button"
@@ -158,7 +172,7 @@ export function TeamBoard({
                   <div className="flex items-start justify-between gap-3">
                     <button
                       type="button"
-                      onClick={() => onFilterPerson(row.member.name)}
+                      onClick={() => setEditing(row.member)}
                       className="min-w-0 flex-1 text-left"
                     >
                       <PersonChip name={row.member.name} />
@@ -182,6 +196,9 @@ export function TeamBoard({
                           {row.member.phone}
                         </p>
                       ) : null}
+                      {row.member.email ? (
+                        <p className="mt-0.5 text-xs text-muted-foreground">{row.member.email}</p>
+                      ) : null}
                       <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
                         <div
                           className="h-full rounded-full bg-primary transition-all"
@@ -189,16 +206,28 @@ export function TeamBoard({
                         />
                       </div>
                     </button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="size-10 shrink-0 text-muted-foreground"
-                      aria-label={`Remove ${row.member.name}`}
-                      onClick={() => void onRemove(row.member.id)}
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
+                    <div className="flex shrink-0 flex-col gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-10 text-muted-foreground"
+                        aria-label={`Edit ${row.member.name}`}
+                        onClick={() => setEditing(row.member)}
+                      >
+                        <Pencil className="size-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-10 text-muted-foreground"
+                        aria-label={`Remove ${row.member.name}`}
+                        onClick={() => void onRemove(row.member.id)}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </li>
@@ -206,6 +235,151 @@ export function TeamBoard({
           })}
         </ul>
       )}
+
+      <MemberEditor
+        member={editing}
+        open={Boolean(editing)}
+        onOpenChange={(open) => {
+          if (!open) setEditing(null);
+        }}
+        onSave={onSave}
+        onShowCalls={(name) => {
+          setEditing(null);
+          onFilterPerson(name);
+        }}
+      />
     </div>
+  );
+}
+
+function MemberEditor({
+  member,
+  open,
+  onOpenChange,
+  onSave,
+  onShowCalls,
+}: {
+  member: Member | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSave: (
+    id: string,
+    input: { name: string; phone?: string; email?: string }
+  ) => Promise<void>;
+  onShowCalls: (name: string) => void;
+}) {
+  if (!member) return null;
+  return (
+    <MemberEditorForm
+      key={member.id}
+      member={member}
+      open={open}
+      onOpenChange={onOpenChange}
+      onSave={onSave}
+      onShowCalls={onShowCalls}
+    />
+  );
+}
+
+function MemberEditorForm({
+  member,
+  open,
+  onOpenChange,
+  onSave,
+  onShowCalls,
+}: {
+  member: Member;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSave: (
+    id: string,
+    input: { name: string; phone?: string; email?: string }
+  ) => Promise<void>;
+  onShowCalls: (name: string) => void;
+}) {
+  const [name, setName] = useState(member.name);
+  const [phone, setPhone] = useState(member.phone);
+  const [email, setEmail] = useState(member.email);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit() {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setError("Name is required.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await onSave(member.id, {
+        name: trimmed,
+        phone: phone.trim(),
+        email: email.trim(),
+      });
+      onOpenChange(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" className="px-4 pb-6">
+        <SheetHeader className="px-0 text-left">
+          <SheetTitle className="font-heading text-2xl tracking-wide">
+            Edit teammate
+          </SheetTitle>
+          <SheetDescription>
+            Update name, phone, or email. Renaming also updates their assigned calls.
+          </SheetDescription>
+        </SheetHeader>
+        <form
+          className="mt-4 space-y-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit();
+          }}
+        >
+          <Input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Name"
+            className="h-12 text-base"
+            autoFocus
+          />
+          <Input
+            value={phone}
+            onChange={(event) => setPhone(event.target.value)}
+            placeholder="Phone (optional)"
+            inputMode="tel"
+            className="h-12 text-base"
+          />
+          <Input
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="Email (optional)"
+            inputMode="email"
+            className="h-12 text-base"
+          />
+          {error ? <p className="text-sm text-destructive">{error}</p> : null}
+          <SheetFooter className="flex-col gap-2 px-0 sm:flex-col">
+            <Button type="submit" className="h-14 w-full text-base" disabled={busy}>
+              {busy ? "Saving…" : "Save teammate"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-12 w-full"
+              onClick={() => onShowCalls(member.name)}
+            >
+              See their sponsor calls
+            </Button>
+          </SheetFooter>
+        </form>
+      </SheetContent>
+    </Sheet>
   );
 }

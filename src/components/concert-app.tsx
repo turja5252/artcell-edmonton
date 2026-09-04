@@ -214,6 +214,54 @@ export function ConcertApp({
     setToast("Removed from the team");
   }
 
+  async function saveMember(
+    id: string,
+    input: { name: string; phone?: string; email?: string }
+  ) {
+    const previous = members.find((member) => member.id === id);
+    const response = await fetch(`/api/members/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    const data = (await response.json()) as { member?: Member; error?: string };
+    if (!response.ok) throw new Error(data.error || "Could not save member");
+    if (data.member) {
+      setMembers((current) =>
+        current
+          .map((member) => (member.id === id ? data.member! : member))
+          .sort((a, b) => a.name.localeCompare(b.name))
+      );
+      if (previous && previous.name !== data.member.name) {
+        setLeads((current) =>
+          current.map((lead) => ({
+            ...lead,
+            assignedTo:
+              lead.assignedTo === previous.name ? data.member!.name : lead.assignedTo,
+            receivedBy:
+              lead.receivedBy === previous.name ? data.member!.name : lead.receivedBy,
+            updatedBy:
+              lead.updatedBy === previous.name ? data.member!.name : lead.updatedBy,
+          }))
+        );
+        setGuests((current) =>
+          current.map((guest) => ({
+            ...guest,
+            assignedTo:
+              guest.assignedTo === previous.name
+                ? data.member!.name
+                : guest.assignedTo,
+            updatedBy:
+              guest.updatedBy === previous.name ? data.member!.name : guest.updatedBy,
+          }))
+        );
+        if (me === previous.name) writeMe(data.member.name);
+      }
+      setToast(`${data.member.name} updated`);
+    }
+    await load();
+  }
+
   function setWhoOpen(open: boolean) {
     if (open) {
       setWhoSkipped(false);
@@ -664,6 +712,7 @@ export function ConcertApp({
               setTab("outreach");
             }}
             onAdd={addMember}
+            onSave={saveMember}
             onRemove={removeMember}
           />
         </section>
