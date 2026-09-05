@@ -77,7 +77,9 @@ export function MediaBoard({
 
   return (
     <div className="space-y-3 pb-24">
-      <p className="text-sm text-muted-foreground">Promo photos, videos, and PDFs.</p>
+      <p className="text-sm text-muted-foreground">
+        Promo photos, videos, and PDFs. Phone clips belong here — not on a sponsor card.
+      </p>
 
       <input
         ref={inputRef}
@@ -136,7 +138,9 @@ export function MediaBoard({
         <div className="rounded-2xl border border-dashed border-border p-6 text-center">
           <ImageIcon className="mx-auto size-8 text-muted-foreground" />
           <p className="mt-3 font-medium">No promo files yet</p>
-          <p className="mt-1 text-sm text-muted-foreground">Promo photos, videos, and PDFs.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Promo photos, videos, and PDFs. Phone clips are fine.
+          </p>
         </div>
       ) : null}
 

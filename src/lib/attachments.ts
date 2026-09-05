@@ -16,13 +16,16 @@ export {
   isPdfMime,
   isPhotoMime,
   isVideoMime,
+  looksLikeVideo,
   MAX_ATTACHMENT_BYTES,
+  sponsorAttachmentError,
   MAX_MEDIA_BLOB_BYTES,
   MAX_MEDIA_SERVER_BYTES,
   mediaRelativePath,
   newMediaId,
   resolveMediaMime as resolveMimeType,
   safeDownloadName,
+  VIDEOS_GO_ON_MEDIA,
 } from "@/lib/media-types";
 
 function sanitizeId(value: string): string {

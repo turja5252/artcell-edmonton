@@ -38,6 +38,7 @@ import {
 } from "@/lib/media-types";
 import {
   binaryFileExists,
+  getBinaryFileSize,
   readBoardWriteMeta,
   readJsonFile,
   writeJsonFile,
@@ -991,6 +992,10 @@ export function registerBlobMediaItem(input: {
     if (!(await binaryFileExists(relative))) {
       throw new Error("Uploaded file was not found in storage");
     }
+    const storedSize =
+      Number.isFinite(input.size) && input.size > 0
+        ? input.size
+        : (await getBinaryFileSize(relative)) ?? 0;
 
     const members = await readMembersFile();
     const allowedNames = members.map((member) => member.name);
@@ -998,7 +1003,7 @@ export function registerBlobMediaItem(input: {
       id: input.id,
       fileName,
       mimeType,
-      size: input.size,
+      size: storedSize,
       uploadedAt: new Date().toISOString(),
       uploadedBy: resolveActorName(input.actor, allowedNames),
       durationSeconds: input.durationSeconds,

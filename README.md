@@ -5,7 +5,7 @@ GitHub: [turja5252/artcell-edmonton](https://github.com/turja5252/artcell-edmont
 
 ## Phone board
 
-- **Calls** — claim a company, mark done, leave what happened, upload/download sponsor photos & PDFs
+- **Calls** — claim a company, mark done, leave what happened, upload/download sponsor photos & PDFs (videos go on Media)
 - **Money** — target, pledged, received
 - **Seats** — tickets sold (with last-updated day), call list with first/last name, phone, email, team assignment, Call button, confirmed / tentative / declined + member count. Add people manually, from Android phone contacts (Chrome), or by importing a .vcf / .csv (iPhone & Android).
 - **List** — shared show tasks with due dates

@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { Download, FileText, ImageIcon, Trash2, Upload } from "lucide-react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
+import { sponsorAttachmentError } from "@/lib/media-types";
 import type { Lead, LeadAttachment } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -27,12 +28,21 @@ export function LeadAttachments({ lead, me, onLeadChange }: Props) {
 
   async function upload(files: FileList | null) {
     if (!files?.length) return;
+    const picked = Array.from(files);
+    const blocked = picked
+      .map((file) => sponsorAttachmentError(file.name, file.type, file.size))
+      .find(Boolean);
+    if (blocked) {
+      setError(blocked);
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
     setBusy(true);
     setError("");
     try {
       const form = new FormData();
       if (me) form.set("actor", me);
-      for (const file of Array.from(files)) {
+      for (const file of picked) {
         form.append("files", file);
       }
       const response = await fetch(`/api/leads/${lead.id}/attachments`, {
@@ -78,7 +88,7 @@ export function LeadAttachments({ lead, me, onLeadChange }: Props) {
         Files · photos & PDFs
       </p>
       <p className="text-sm text-muted-foreground">
-        Upload posters, logos, or PDF docs for this sponsor. Multiple files allowed.
+        Posters, logos, or PDFs for this sponsor. Videos go on the Media tab.
       </p>
 
       <input

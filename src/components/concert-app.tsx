@@ -1092,7 +1092,7 @@ export function ConcertApp({
         </div>
       ) : null}
 
-      {error ? (
+      {error && tab !== "media" ? (
         <div className="mt-3 rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {error}
           <Button
@@ -1266,6 +1266,11 @@ export function ConcertApp({
             uploading={mediaUploading}
             uploadProgress={mediaUploadProgress}
             removingId={mediaRemovingId}
+            error={error}
+            onRetry={() => {
+              setError("");
+              void load("poll");
+            }}
             onUpload={(files) => void uploadMedia(files)}
             onDelete={(item) => void deleteMedia(item)}
           />

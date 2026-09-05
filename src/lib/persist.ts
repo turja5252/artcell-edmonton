@@ -430,6 +430,31 @@ export async function getBinaryPublicUrl(
   return null;
 }
 
+export async function getBinaryFileSize(relativePath: string): Promise<number | null> {
+  if (useBlobStore()) {
+    const pathname = `${PREFIX}/${fileKey(relativePath)}`;
+    try {
+      const meta = await head(pathname);
+      if (typeof meta?.size === "number" && meta.size > 0) return meta.size;
+    } catch {
+      // fall through to list
+    }
+    try {
+      const match = await listExactBlob(pathname);
+      if (typeof match?.size === "number" && match.size > 0) return match.size;
+    } catch {
+      // ignore
+    }
+    return null;
+  }
+  try {
+    const stat = await fs.stat(path.join(process.cwd(), "data", relativePath));
+    return stat.size > 0 ? stat.size : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function binaryFileExists(relativePath: string): Promise<boolean> {
   if (useBlobStore()) {
     const publicUrl = await getBinaryPublicUrl(relativePath);

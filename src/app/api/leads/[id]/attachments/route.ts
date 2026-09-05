@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { addLeadAttachment } from "@/lib/store";
-import { MAX_ATTACHMENT_BYTES } from "@/lib/attachments";
+import { sponsorAttachmentError } from "@/lib/attachments";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,11 +26,9 @@ export async function POST(
     let lead = null;
     const attachments = [];
     for (const file of files) {
-      if (file.size > MAX_ATTACHMENT_BYTES) {
-        return NextResponse.json(
-          { error: `${file.name} is too large (max 12 MB)` },
-          { status: 400 }
-        );
+      const blocked = sponsorAttachmentError(file.name, file.type, file.size);
+      if (blocked) {
+        return NextResponse.json({ error: blocked }, { status: 400 });
       }
       const bytes = Buffer.from(await file.arrayBuffer());
       const result = await addLeadAttachment({
@@ -51,7 +49,8 @@ export async function POST(
       ? 404
       : message.includes("Only photos") ||
           message.includes("too large") ||
-          message.includes("Empty")
+          message.includes("Empty") ||
+          message.includes("Videos go")
         ? 400
         : 500;
     return NextResponse.json({ error: message }, { status });

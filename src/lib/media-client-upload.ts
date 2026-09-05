@@ -5,7 +5,10 @@ import { upload } from "@vercel/blob/client";
 import {
   ensureMediaFileName,
   fallbackFileName,
+  formatMaxMb,
+  isUnknownFileSize,
   looksLikeVideo,
+  MAX_MEDIA_BLOB_BYTES,
   MAX_MEDIA_SERVER_BYTES,
   MAX_SERVERLESS_POST_BYTES,
   mediaBlobPathname,
@@ -22,16 +25,20 @@ export async function readMediaUploadConfig(): Promise<MediaUploadConfig> {
     const response = await fetch("/api/media/upload", { cache: "no-store" });
     const data = (await response.json()) as Partial<MediaUploadConfig>;
     if (!response.ok) throw new Error("config");
+    const clientUpload = Boolean(data.clientUpload);
     return {
-      clientUpload: Boolean(data.clientUpload),
-      maxBytes: Number(data.maxBytes) || MAX_MEDIA_SERVER_BYTES,
+      clientUpload,
+      maxBytes:
+        Number(data.maxBytes) ||
+        (clientUpload ? MAX_MEDIA_BLOB_BYTES : MAX_MEDIA_SERVER_BYTES),
       vercel: Boolean(data.vercel),
     };
   } catch {
+    // Prefer Blob. Falling back to POST on Vercel hits the ~4.5 MB body cap.
     return {
-      clientUpload: false,
-      maxBytes: MAX_MEDIA_SERVER_BYTES,
-      vercel: false,
+      clientUpload: true,
+      maxBytes: MAX_MEDIA_BLOB_BYTES,
+      vercel: true,
     };
   }
 }
@@ -56,14 +63,24 @@ export function readVideoDuration(file: File): Promise<number | null> {
   });
 }
 
+function videoMaxBytes(config: MediaUploadConfig): number {
+  return config.clientUpload
+    ? Math.max(config.maxBytes || 0, MAX_MEDIA_BLOB_BYTES)
+    : Math.max(config.maxBytes || 0, MAX_MEDIA_SERVER_BYTES);
+}
+
 function rejectIfTooLarge(file: File, config: MediaUploadConfig) {
+  if (isUnknownFileSize(file.size)) return;
   const isVideo = looksLikeVideo(file.name, file.type);
-  if (videoTooLargeForHost({ isVideo, size: file.size, ...config })) {
-    throw new Error(VIDEO_TOO_LARGE_HOST);
+  if (isVideo) {
+    if (videoTooLargeForHost({ isVideo, size: file.size, ...config })) {
+      throw new Error(VIDEO_TOO_LARGE_HOST);
+    }
+    return;
   }
   if (file.size > config.maxBytes) {
     throw new Error(
-      `${file.name || "File"} is too large (max ${Math.round(config.maxBytes / (1024 * 1024))} MB)`
+      `${file.name || "File"} is too large (max ${formatMaxMb(config.maxBytes)})`
     );
   }
 }
@@ -81,17 +98,18 @@ export async function uploadMediaViaBlob(
   const storedName = ensureMediaFileName(fileName, mimeType);
   const id = newMediaId();
   const pathname = mediaBlobPathname(id, storedName, mimeType);
+  const unknownSize = isUnknownFileSize(file.size);
 
   await upload(pathname, file, {
     access: "public",
     handleUploadUrl: "/api/media/upload",
-    multipart: file.size > MAX_SERVERLESS_POST_BYTES,
+    multipart: unknownSize || file.size > MAX_SERVERLESS_POST_BYTES,
     contentType: mimeType || undefined,
     clientPayload: JSON.stringify({
       id,
       fileName: storedName,
       mimeType,
-      size: file.size,
+      size: unknownSize ? 0 : file.size,
       actor: options.actor,
       durationSeconds: options.durationSeconds,
     }),
@@ -107,7 +125,7 @@ export async function uploadMediaViaBlob(
       id,
       fileName: storedName,
       mimeType,
-      size: file.size,
+      size: unknownSize ? 0 : file.size,
       durationSeconds: options.durationSeconds,
       actor: options.actor,
     }),
@@ -134,15 +152,39 @@ export function postMediaForm(
     };
     xhr.onload = () => {
       const payload = (xhr.response || {}) as { media?: MediaItem[]; error?: string };
+      const raw =
+        typeof xhr.response === "string"
+          ? xhr.response
+          : payload.error || "";
+      const tooLarge =
+        xhr.status === 413 ||
+        /too large|payload|entity too large|413/i.test(String(raw));
       resolve({
         ok: xhr.status >= 200 && xhr.status < 300,
         media: payload.media,
-        error: payload.error,
+        error: tooLarge
+          ? "Upload is too big for this path. Use the Media tab so the video goes to Blob."
+          : payload.error,
       });
     };
     xhr.onerror = () => reject(new Error("Upload failed"));
     xhr.send(form);
   });
+}
+
+async function uploadMediaViaBlobWithRetry(
+  file: File,
+  options: {
+    actor: string | null;
+    durationSeconds: number | null;
+    onProgress?: (percent: number) => void;
+  }
+): Promise<MediaItem> {
+  try {
+    return await uploadMediaViaBlob(file, options);
+  } catch {
+    return await uploadMediaViaBlob(file, options);
+  }
 }
 
 export async function uploadMediaFiles(
@@ -164,11 +206,13 @@ export async function uploadMediaFiles(
     const onProgress = (percent: number) => {
       options.onProgress?.(Math.round(base + (percent / 100) * span));
     };
+    const isVideo = looksLikeVideo(file.name, file.type);
+    const tryBlob = config.clientUpload || isVideo;
 
-    if (config.clientUpload) {
+    if (tryBlob) {
       try {
         uploaded.push(
-          await uploadMediaViaBlob(file, {
+          await uploadMediaViaBlobWithRetry(file, {
             actor: options.actor,
             durationSeconds,
             onProgress,
@@ -176,11 +220,14 @@ export async function uploadMediaFiles(
         );
         continue;
       } catch (error) {
-        const isVideo = looksLikeVideo(file.name, file.type);
-        if (isVideo && file.size > MAX_SERVERLESS_POST_BYTES) {
-          throw new Error(VIDEO_TOO_LARGE_HOST);
+        const known = !isUnknownFileSize(file.size);
+        if (known && file.size > videoMaxBytes(config)) {
+          throw new Error(
+            `${file.name || "File"} is too large (max ${formatMaxMb(videoMaxBytes(config))})`
+          );
         }
-        if (file.size > MAX_SERVERLESS_POST_BYTES) {
+        const canServerPost = known && file.size <= MAX_SERVERLESS_POST_BYTES;
+        if (!canServerPost) {
           throw error instanceof Error ? error : new Error("Upload failed");
         }
       }
