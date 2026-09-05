@@ -1,7 +1,7 @@
 import { ConcertApp } from "@/components/concert-app";
 import { DEFAULT_CONCERT_DATE } from "@/lib/concert-date";
 import { getBoard } from "@/lib/store";
-import type { Deliverable, Guest, Lead, Member, Settings } from "@/lib/types";
+import type { Deliverable, Guest, Lead, MediaItem, Member, Settings } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +10,7 @@ export default async function Home() {
   let guests: Guest[] = [];
   let members: Member[] = [];
   let deliverables: Deliverable[] = [];
+  let media: MediaItem[] = [];
   let settings: Settings = {
     moneyTarget: 0,
     attendanceTarget: 0,
@@ -26,6 +27,7 @@ export default async function Home() {
     members = board.members;
     settings = board.settings;
     deliverables = board.deliverables;
+    media = board.media ?? [];
   } catch (error) {
     loadError = error instanceof Error ? error.message : "Could not load the board";
   }
@@ -36,6 +38,7 @@ export default async function Home() {
       initialMembers={members}
       initialSettings={settings}
       initialDeliverables={deliverables}
+      initialMedia={media}
       initialError={loadError}
     />
   );

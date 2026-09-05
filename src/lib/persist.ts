@@ -12,6 +12,7 @@ const LIVE_JSON = new Set([
   "members.json",
   "settings.json",
   "deliverables.json",
+  "media.json",
 ]);
 
 type CacheEntry = {
@@ -33,7 +34,8 @@ export function jsonFreshness(value: unknown): number {
     let max = 0;
     for (const item of value) {
       if (!item || typeof item !== "object") continue;
-      const stamp = (item as { updatedAt?: unknown }).updatedAt;
+      const record = item as { updatedAt?: unknown; uploadedAt?: unknown };
+      const stamp = record.updatedAt ?? record.uploadedAt;
       if (typeof stamp === "string") {
         const time = Date.parse(stamp);
         if (Number.isFinite(time)) max = Math.max(max, time);

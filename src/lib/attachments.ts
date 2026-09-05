@@ -54,6 +54,10 @@ export function attachmentRelativePath(
   );
 }
 
+export function mediaRelativePath(mediaId: string, fileName: string): string {
+  return path.posix.join("media", `${sanitizeId(mediaId)}${extOf(fileName)}`);
+}
+
 export function isPhotoMime(mimeType: string): boolean {
   return mimeType.startsWith("image/");
 }
@@ -81,6 +85,10 @@ export function assertAllowedAttachment(fileName: string, mimeType: string, size
 
 export function newAttachmentId(): string {
   return `att-${Date.now().toString(36)}-${randomBytes(3).toString("hex")}`;
+}
+
+export function newMediaId(): string {
+  return `media-${Date.now().toString(36)}-${randomBytes(3).toString("hex")}`;
 }
 
 export function safeDownloadName(fileName: string): string {
@@ -124,6 +132,32 @@ export async function deleteAttachmentFile(leadId: string, attachment: LeadAttac
   await deleteBinaryFile(
     attachmentRelativePath(leadId, attachment.id, attachment.fileName)
   );
+}
+
+export async function writeMediaFile(
+  mediaId: string,
+  fileName: string,
+  bytes: Buffer,
+  mimeType?: string
+) {
+  const relative = mediaRelativePath(mediaId, fileName);
+  await writeBinaryFile(
+    relative,
+    bytes,
+    mimeType || resolveMimeType(fileName, "") || "application/octet-stream"
+  );
+  return relative;
+}
+
+export async function readMediaFile(item: {
+  id: string;
+  fileName: string;
+}): Promise<Buffer> {
+  return readBinaryFile(mediaRelativePath(item.id, item.fileName));
+}
+
+export async function deleteMediaFile(item: { id: string; fileName: string }) {
+  await deleteBinaryFile(mediaRelativePath(item.id, item.fileName));
 }
 
 export function contentHash(bytes: Buffer): string {

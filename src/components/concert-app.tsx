@@ -15,7 +15,7 @@ import {
   ClipboardList,
   FileSpreadsheet,
   Handshake,
-  ListMusic,
+  ImageIcon,
   Plus,
   RefreshCw,
   Search,
@@ -33,7 +33,7 @@ import { LeadEditor } from "@/components/lead-editor";
 import { MoneyBoard } from "@/components/money-board";
 import { PersonChip } from "@/components/person-chip";
 import { SeatsBoard, type SeatFilter } from "@/components/seats-board";
-import { SetlistBoard } from "@/components/setlist-board";
+import { MediaBoard } from "@/components/media-board";
 import { TargetEditor } from "@/components/target-editor";
 import { TicketsEditor } from "@/components/tickets-editor";
 import { TeamBoard } from "@/components/team-board";
@@ -46,6 +46,7 @@ import {
   mergeDeliverables,
   mergeGuests,
   mergeLeads,
+  mergeMedia,
   mergeMembers,
   mergeSettings,
   parseUpdatedAt,
@@ -53,7 +54,7 @@ import {
 } from "@/lib/board-sync";
 import { formatMoney } from "@/lib/money";
 import { formatTime } from "@/lib/people";
-import type { Deliverable, Guest, GuestStatus, Lead, Member, Settings } from "@/lib/types";
+import type { Deliverable, Guest, GuestStatus, Lead, MediaItem, Member, Settings } from "@/lib/types";
 import {
   displayGuestName,
   DECLINED_PILL_CLASS,
@@ -95,7 +96,7 @@ function writeMe(name: string) {
   window.dispatchEvent(new Event(ME_EVENT));
 }
 
-type Tab = "outreach" | "money" | "seats" | "team" | "setlist" | "deliverables";
+type Tab = "outreach" | "money" | "seats" | "team" | "deliverables" | "media";
 type Filter = "mine" | "open" | "unassigned" | "done" | "all";
 
 function matches(lead: Lead, query: string, filter: Filter, me: string) {
@@ -116,6 +117,7 @@ export function ConcertApp({
   initialMembers,
   initialSettings,
   initialDeliverables,
+  initialMedia,
   initialError = "",
 }: {
   initialLeads: Lead[];
@@ -123,6 +125,7 @@ export function ConcertApp({
   initialMembers: Member[];
   initialSettings: Settings;
   initialDeliverables: Deliverable[];
+  initialMedia: MediaItem[];
   initialError?: string;
 }) {
   const me = useSyncExternalStore(subscribeMe, readMe, () => "");
@@ -141,7 +144,10 @@ export function ConcertApp({
   const [members, setMembers] = useState<Member[]>(initialMembers);
   const [settings, setSettings] = useState<Settings>(initialSettings);
   const [deliverables, setDeliverables] = useState<Deliverable[]>(initialDeliverables);
+  const [media, setMedia] = useState<MediaItem[]>(initialMedia);
   const [tab, setTab] = useState<Tab>("outreach");
+  const [mediaUploading, setMediaUploading] = useState(false);
+  const [mediaRemovingId, setMediaRemovingId] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("open");
   const [seatFilter, setSeatFilter] = useState<SeatFilter>("not_called");
   const [query, setQuery] = useState("");
@@ -166,6 +172,7 @@ export function ConcertApp({
   const busyIdRef = useRef<string | null>(null);
   const memberSaving = useRef(false);
   const settingsSaving = useRef(false);
+  const mediaSaving = useRef(false);
   const identityHold = useRef<number | null>(null);
   const brandTaps = useRef<number[]>([]);
   const deletedIds = useRef({
@@ -173,6 +180,7 @@ export function ConcertApp({
     guests: new Set<string>(),
     members: new Set<string>(),
     deliverables: new Set<string>(),
+    media: new Set<string>(),
   });
 
   const people = useMemo(
@@ -219,6 +227,7 @@ export function ConcertApp({
       members?: Member[];
       settings?: Settings;
       deliverables?: Deliverable[];
+      media?: MediaItem[];
     },
     mode: "poll" | "replace"
   ) {
@@ -228,6 +237,7 @@ export function ConcertApp({
       if (data.members) setMembers(data.members);
       if (data.settings) setSettings(data.settings);
       if (data.deliverables) setDeliverables(data.deliverables);
+      if (data.media) setMedia(data.media);
       return;
     }
     if (data.leads) {
@@ -269,6 +279,17 @@ export function ConcertApp({
         )
       );
     }
+    if (data.media) {
+      setMedia((current) =>
+        mergeMedia(
+          current,
+          data.media!,
+          deletedIds.current.media,
+          busyIdRef.current,
+          lastWriteById.current
+        )
+      );
+    }
   }
 
   function saveInFlight() {
@@ -277,6 +298,7 @@ export function ConcertApp({
       busyIdRef.current != null ||
       memberSaving.current ||
       settingsSaving.current ||
+      mediaSaving.current ||
       Date.now() - Math.max(lastSaveAt.current, lastWriteAt.current) <
         SAVE_POLL_DEBOUNCE_MS
     );
@@ -291,6 +313,7 @@ export function ConcertApp({
       members?: Member[];
       settings?: Settings;
       deliverables?: Deliverable[];
+      media?: MediaItem[];
       writtenAt?: string | null;
       error?: string;
     };
@@ -497,6 +520,13 @@ export function ConcertApp({
                 item.assignedTo === previous.name ? data.member!.name : item.assignedTo,
               updatedBy:
                 item.updatedBy === previous.name ? data.member!.name : item.updatedBy,
+            }))
+          );
+          setMedia((current) =>
+            current.map((item) => ({
+              ...item,
+              uploadedBy:
+                item.uploadedBy === previous.name ? data.member!.name : item.uploadedBy,
             }))
           );
           if (me === previous.name) writeMe(data.member.name);
@@ -820,6 +850,72 @@ export function ConcertApp({
       setError(err instanceof Error ? err.message : "Could not delete");
       await load("replace");
     } finally {
+      markSaveEnd();
+    }
+  }
+
+  async function uploadMedia(files: FileList) {
+    mediaSaving.current = true;
+    setMediaUploading(true);
+    markSaveStart();
+    setError("");
+    try {
+      const form = new FormData();
+      if (me) form.set("actor", me);
+      for (const file of Array.from(files)) {
+        form.append("files", file);
+      }
+      const response = await fetch("/api/media", {
+        method: "POST",
+        body: form,
+      });
+      const data = (await response.json()) as { media?: MediaItem[]; error?: string };
+      if (!response.ok) throw new Error(data.error || "Upload failed");
+      if (data.media?.length) {
+        for (const item of data.media) {
+          noteSuccessfulWrite(item.id, item.uploadedAt);
+        }
+        setMedia((current) => {
+          const seen = new Set(current.map((item) => item.id));
+          return [...current, ...data.media!.filter((item) => !seen.has(item.id))];
+        });
+        setToast(
+          data.media.length === 1 ? "File uploaded" : `${data.media.length} files uploaded`
+        );
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      mediaSaving.current = false;
+      setMediaUploading(false);
+      markSaveEnd();
+    }
+  }
+
+  async function deleteMedia(item: MediaItem) {
+    deletedIds.current.media.add(item.id);
+    mediaSaving.current = true;
+    setMediaRemovingId(item.id);
+    markSaveStart();
+    setMedia((current) => current.filter((row) => row.id !== item.id));
+    setError("");
+    try {
+      const response = await fetch(`/api/media/${item.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ actor: me || null }),
+      });
+      const data = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(data.error || "Could not delete file");
+      noteSuccessfulWrite(item.id, new Date().toISOString());
+      setToast("File deleted");
+    } catch (err) {
+      deletedIds.current.media.delete(item.id);
+      setError(err instanceof Error ? err.message : "Could not delete file");
+      await load("replace");
+    } finally {
+      mediaSaving.current = false;
+      setMediaRemovingId(null);
       markSaveEnd();
     }
   }
@@ -1159,12 +1255,6 @@ export function ConcertApp({
         </section>
       )}
 
-      {tab === "setlist" && (
-        <section className="mt-5 flex-1">
-          <SetlistBoard />
-        </section>
-      )}
-
       {tab === "deliverables" && (
         <section className="mt-5 flex-1">
           <DeliverablesBoard
@@ -1176,6 +1266,18 @@ export function ConcertApp({
             onAdd={addDeliverable}
             onSave={saveDeliverable}
             onDelete={deleteDeliverable}
+          />
+        </section>
+      )}
+
+      {tab === "media" && (
+        <section className="mt-5 flex-1">
+          <MediaBoard
+            items={media}
+            uploading={mediaUploading}
+            removingId={mediaRemovingId}
+            onUpload={(files) => void uploadMedia(files)}
+            onDelete={(item) => void deleteMedia(item)}
           />
         </section>
       )}
@@ -1212,22 +1314,22 @@ export function ConcertApp({
             onClick={() => setTab("seats")}
           />
           <NavButton
+            active={tab === "deliverables"}
+            icon={<ClipboardList className="size-4" />}
+            label="List"
+            onClick={() => setTab("deliverables")}
+          />
+          <NavButton
             active={tab === "team"}
             icon={<Users className="size-4" />}
             label="Team"
             onClick={() => setTab("team")}
           />
           <NavButton
-            active={tab === "setlist"}
-            icon={<ListMusic className="size-4" />}
-            label="Songs"
-            onClick={() => setTab("setlist")}
-          />
-          <NavButton
-            active={tab === "deliverables"}
-            icon={<ClipboardList className="size-4" />}
-            label="List"
-            onClick={() => setTab("deliverables")}
+            active={tab === "media"}
+            icon={<ImageIcon className="size-4" />}
+            label="Media"
+            onClick={() => setTab("media")}
           />
         </div>
       </nav>

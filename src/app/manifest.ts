@@ -6,7 +6,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Artcell Edmonton",
     short_name: "Artcell",
     description:
-      "Mobile outreach board and setlist for the Artcell Edmonton concert team.",
+      "Mobile outreach board for the Artcell Edmonton concert team.",
     start_url: "/",
     scope: "/",
     display: "standalone",

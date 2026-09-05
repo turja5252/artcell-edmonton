@@ -1,4 +1,4 @@
-import type { Deliverable, Guest, Lead, Member, Settings } from "@/lib/types";
+import type { Deliverable, Guest, Lead, MediaItem, Member, Settings } from "@/lib/types";
 
 export function parseUpdatedAt(value: string | null | undefined): number {
   if (!value) return 0;
@@ -39,6 +39,7 @@ export function snapshotStamp(input: {
   leads?: Array<{ updatedAt?: string | null }>;
   guests?: Array<{ updatedAt?: string | null }>;
   deliverables?: Array<{ updatedAt?: string | null }>;
+  media?: Array<{ uploadedAt?: string | null; updatedAt?: string | null }>;
   settings?: { ticketsSoldUpdatedAt?: string | null } | null;
 }): number {
   const meta = parseUpdatedAt(input.writtenAt);
@@ -47,6 +48,11 @@ export function snapshotStamp(input: {
     maxUpdatedAt(input.leads ?? []),
     maxUpdatedAt(input.guests ?? []),
     maxUpdatedAt(input.deliverables ?? []),
+    maxUpdatedAt(
+      (input.media ?? []).map((item) => ({
+        updatedAt: item.updatedAt ?? item.uploadedAt,
+      }))
+    ),
     parseUpdatedAt(input.settings?.ticketsSoldUpdatedAt)
   );
 }
@@ -129,6 +135,26 @@ export function mergeDeliverables(
   lastWriteById?: Map<string, number>
 ): Deliverable[] {
   return mergeByUpdatedAt(local, remote, deletedIds, pendingId, lastWriteById);
+}
+
+function mediaStamp(item: MediaItem): MediaItem & { updatedAt: string } {
+  return { ...item, updatedAt: item.uploadedAt };
+}
+
+export function mergeMedia(
+  local: MediaItem[],
+  remote: MediaItem[],
+  deletedIds: Set<string>,
+  pendingId?: string | null,
+  lastWriteById?: Map<string, number>
+): MediaItem[] {
+  return mergeByUpdatedAt(
+    local.map(mediaStamp),
+    remote.map(mediaStamp),
+    deletedIds,
+    pendingId,
+    lastWriteById
+  );
 }
 
 export function mergeMembers(

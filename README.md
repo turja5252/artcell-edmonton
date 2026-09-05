@@ -8,8 +8,9 @@ GitHub: [turja5252/artcell-edmonton](https://github.com/turja5252/artcell-edmont
 - **Calls** — claim a company, mark done, leave what happened, upload/download sponsor photos & PDFs
 - **Money** — target, pledged, received
 - **Seats** — tickets sold (with last-updated day), call list with first/last name, phone, email, team assignment, Call button, confirmed / tentative / declined + member count. Add people manually, from Android phone contacts (Chrome), or by importing a .vcf / .csv (iPhone & Android).
+- **List** — shared show tasks with due dates
 - **Team** — roster + workload. Tanzim and everyone else stay regular users.
-- **Songs** — setlist cues
+- **Media** — shared promo photos and PDFs. Anyone on the team can upload.
 
 Anyone with the link can tap. No login.
 

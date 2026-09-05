@@ -124,12 +124,22 @@ export type DeliverablePatch = Partial<
   actor?: string | null;
 };
 
+export type MediaItem = {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+  uploadedAt: string;
+  uploadedBy: string | null;
+};
+
 export type BoardSnapshot = {
   leads: Lead[];
   guests: Guest[];
   members: Member[];
   settings: Settings;
   deliverables: Deliverable[];
+  media: MediaItem[];
   writtenAt: string | null;
 };
 

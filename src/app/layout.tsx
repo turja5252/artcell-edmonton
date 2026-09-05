@@ -19,7 +19,7 @@ const oswald = Oswald({
 export const metadata: Metadata = {
   title: "Artcell Edmonton Show",
   description:
-    "Mobile outreach board and setlist for the Artcell Edmonton concert team. Claim contacts, mark them done, and leave results from your phone.",
+    "Mobile outreach board for the Artcell Edmonton concert team. Claim contacts, mark them done, and share promo photos and PDFs from your phone.",
   applicationName: "Artcell Edmonton",
   manifest: "/manifest.webmanifest",
   appleWebApp: {

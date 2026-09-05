@@ -40,6 +40,9 @@ yarn-error.log*
 # live write clock — generated, not seed data
 /data/_meta.json
 
+# promo binaries (index stays in data/media.json)
+/data/media/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

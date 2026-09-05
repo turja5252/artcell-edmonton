@@ -10,6 +10,7 @@ import type {
   Lead,
   LeadAttachment,
   LeadPatch,
+  MediaItem,
   Member,
   MemberPatch,
   Settings,
@@ -18,10 +19,13 @@ import { displayGuestName, normalizeGuestStatus, resolveLeadDeclined } from "@/l
 import {
   assertAllowedAttachment,
   deleteAttachmentFile,
+  deleteMediaFile,
   newAttachmentId,
+  newMediaId,
   removeLeadUploadDir,
   safeDownloadName,
   writeAttachmentFile,
+  writeMediaFile,
 } from "@/lib/attachments";
 import { readBoardWriteMeta, readJsonFile, writeJsonFile } from "@/lib/persist";
 import type { BoardSnapshot } from "@/lib/types";
@@ -43,6 +47,7 @@ const GUESTS_FILE = "guests.json";
 const MEMBERS_FILE = "members.json";
 const SETTINGS_FILE = "settings.json";
 const DELIVERABLES_FILE = "deliverables.json";
+const MEDIA_FILE = "media.json";
 
 const DEFAULT_SETTINGS: Settings = {
   moneyTarget: 0,
@@ -76,6 +81,19 @@ function stamp<T extends { updatedAt: string | null; updatedBy: string | null }>
     ...item,
     updatedAt: new Date().toISOString(),
     updatedBy: nextActor,
+  };
+}
+
+function normalizeMediaItem(
+  raw: Partial<MediaItem> & { id: string; fileName: string }
+): MediaItem {
+  return {
+    id: raw.id,
+    fileName: raw.fileName,
+    mimeType: raw.mimeType || "application/octet-stream",
+    size: Number(raw.size) || 0,
+    uploadedAt: raw.uploadedAt || new Date().toISOString(),
+    uploadedBy: raw.uploadedBy?.trim() || null,
   };
 }
 
@@ -284,6 +302,17 @@ async function writeDeliverablesFile(items: Deliverable[]) {
   await writeJsonFile(DELIVERABLES_FILE, items);
 }
 
+async function readMediaFileList(): Promise<MediaItem[]> {
+  const parsed = await readJsonFile<MediaItem[]>(MEDIA_FILE, []);
+  return parsed
+    .filter((item): item is MediaItem => Boolean(item?.id && item?.fileName))
+    .map((item) => normalizeMediaItem(item));
+}
+
+async function writeMediaFileList(items: MediaItem[]) {
+  await writeJsonFile(MEDIA_FILE, items);
+}
+
 export function listLeads(): Promise<Lead[]> {
   return enqueue(readLeadsFile);
 }
@@ -304,6 +333,10 @@ export function listDeliverables(): Promise<Deliverable[]> {
   return enqueue(readDeliverablesFile);
 }
 
+export function listMedia(): Promise<MediaItem[]> {
+  return enqueue(readMediaFileList);
+}
+
 export function getBoard(): Promise<BoardSnapshot> {
   return enqueue(async () => {
     const membersRaw = await readJsonFile<Member[]>(MEMBERS_FILE, []);
@@ -312,6 +345,7 @@ export function getBoard(): Promise<BoardSnapshot> {
     const leadsOriginal = await readLeadsFile();
     const guestsOriginal = await readGuestsFile();
     const deliverablesOriginal = await readDeliverablesFile();
+    const mediaOriginal = await readMediaFileList();
     const settings = await readSettingsFile();
     const meta = await readBoardWriteMeta();
 
@@ -343,10 +377,17 @@ export function getBoard(): Promise<BoardSnapshot> {
               canonicalizeStoredAssignee(item.assignedTo, allowedNames) ?? item.assignedTo,
             updatedBy: resolveActorName(item.updatedBy, allowedNames) ?? item.updatedBy,
           }));
+    const media =
+      members.length === 0
+        ? mediaOriginal
+        : mediaOriginal.map((item) => ({
+            ...item,
+            uploadedBy: resolveActorName(item.uploadedBy, allowedNames) ?? item.uploadedBy,
+          }));
 
     // Read-only: never persist folds or assignee rewrites from GET / SSR.
     // A stale blob read + write was overwriting newer PATCH results.
-    const computed = snapshotStamp({ leads, guests, deliverables, settings });
+    const computed = snapshotStamp({ leads, guests, deliverables, media, settings });
     const metaStamp = meta?.writtenAt ?? null;
     const metaAt = metaStamp ? Date.parse(metaStamp) : 0;
     const writtenAt =
@@ -356,7 +397,7 @@ export function getBoard(): Promise<BoardSnapshot> {
           ? new Date(computed).toISOString()
           : metaStamp;
 
-    return { leads, guests, members, settings, deliverables, writtenAt };
+    return { leads, guests, members, settings, deliverables, media, writtenAt };
   });
 }
 
@@ -835,6 +876,55 @@ export function patchDeliverable(id: string, patch: DeliverablePatch): Promise<D
   });
 }
 
+export function addMediaItem(input: {
+  fileName: string;
+  mimeType: string;
+  bytes: Buffer;
+  actor?: string | null;
+}): Promise<MediaItem> {
+  return enqueue(async () => {
+    const mimeType = assertAllowedAttachment(
+      input.fileName,
+      input.mimeType,
+      input.bytes.length
+    );
+    const members = await readMembersFile();
+    const allowedNames = members.map((member) => member.name);
+    const items = await readMediaFileList();
+    const item = normalizeMediaItem({
+      id: newMediaId(),
+      fileName: safeDownloadName(input.fileName),
+      mimeType,
+      size: input.bytes.length,
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: resolveActorName(input.actor, allowedNames),
+    });
+    await writeMediaFile(item.id, item.fileName, input.bytes, mimeType);
+    items.push(item);
+    await writeMediaFileList(items);
+    return item;
+  });
+}
+
+export function removeMediaItem(id: string): Promise<void> {
+  return enqueue(async () => {
+    const items = await readMediaFileList();
+    const item = items.find((row) => row.id === id);
+    if (!item) throw new Error("File not found");
+    await deleteMediaFile(item);
+    await writeMediaFileList(items.filter((row) => row.id !== id));
+  });
+}
+
+export function getMediaItem(id: string): Promise<MediaItem> {
+  return enqueue(async () => {
+    const items = await readMediaFileList();
+    const item = items.find((row) => row.id === id);
+    if (!item) throw new Error("File not found");
+    return item;
+  });
+}
+
 export function deleteDeliverable(id: string): Promise<void> {
   return enqueue(async () => {
     const items = await readDeliverablesFile();
@@ -1016,6 +1106,17 @@ export function patchMember(id: string, patch: MemberPatch): Promise<Member> {
         }
       }
       if (deliverablesChanged) await writeDeliverablesFile(deliverables);
+
+      const media = await readMediaFileList();
+      let mediaChanged = false;
+      for (let i = 0; i < media.length; i++) {
+        const item = media[i];
+        if (matchesPrevious(item.uploadedBy)) {
+          media[i] = { ...item, uploadedBy: next.name };
+          mediaChanged = true;
+        }
+      }
+      if (mediaChanged) await writeMediaFileList(media);
     }
 
     return next;
