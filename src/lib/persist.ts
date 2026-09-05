@@ -71,9 +71,19 @@ export function blobReadWriteToken(): string | undefined {
   return token || undefined;
 }
 
-/** True when `/api/media/token` can mint a client token (RW token present). */
+/** True when a classic Blob client token can be minted (RW token present). */
 export function canMintBlobClientToken(): boolean {
   return Boolean(blobReadWriteToken());
+}
+
+/**
+ * How the browser should talk to `/api/media/upload`.
+ * OIDC + `BLOB_STORE_ID` is enough for server writes and presigned PUTs,
+ * but not for HMAC client tokens.
+ */
+export function blobClientUploadMode(): "token" | "presigned" | null {
+  if (!useBlobStore()) return null;
+  return blobReadWriteToken() ? "token" : "presigned";
 }
 
 function assertWritableStore(action: string) {

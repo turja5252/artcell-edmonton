@@ -1,25 +1,15 @@
 import { jsonNoStore } from "@/lib/http";
 import { mediaPutErrorResponse, putMediaFromRequest } from "@/lib/media-server-put";
-import { MAX_SERVERLESS_POST_BYTES } from "@/lib/media-types";
-import { canMintBlobClientToken, useBlobStore } from "@/lib/persist";
 import { listMedia, registerBlobMediaItem } from "@/lib/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-/** Videos can take a while to buffer; Vercel still caps the body at ~4.5 MB on many accounts. */
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function GET() {
   try {
     const media = await listMedia();
-    return jsonNoStore({
-      media,
-      serverUpload: true,
-      serverMaxBytes: MAX_SERVERLESS_POST_BYTES,
-      canMintToken: canMintBlobClientToken(),
-      blob: useBlobStore(),
-      vercel: Boolean(process.env.VERCEL),
-    });
+    return jsonNoStore({ media });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load media";
     return jsonNoStore({ error: message }, { status: 500 });
@@ -54,7 +44,6 @@ export async function POST(request: Request) {
     if (contentType.includes("application/json")) {
       return await registerFromJson(request);
     }
-    // Multipart / raw body: server-side Blob `put()` (same helper persist.ts uses).
     return await putMediaFromRequest(request);
   } catch (error) {
     return mediaPutErrorResponse(error);
