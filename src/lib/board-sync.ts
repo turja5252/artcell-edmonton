@@ -1,3 +1,4 @@
+import { canonicalizeTicketUrl } from "@/lib/tickets";
 import type { Deliverable, Guest, Lead, MediaItem, Member, Settings } from "@/lib/types";
 
 export function parseUpdatedAt(value: string | null | undefined): number {
@@ -187,13 +188,15 @@ export function mergeMembers(
 }
 
 export function mergeSettings(local: Settings, remote: Settings): Settings {
+  const ticketUrl = canonicalizeTicketUrl(remote.ticketUrl || local.ticketUrl);
   if (!isRemoteNewer(local.ticketsSoldUpdatedAt, remote.ticketsSoldUpdatedAt)) {
     return {
       ...remote,
+      ticketUrl,
       ticketsSold: local.ticketsSold,
       ticketsSoldUpdatedAt: local.ticketsSoldUpdatedAt,
       ticketsSoldUpdatedBy: local.ticketsSoldUpdatedBy,
     };
   }
-  return remote;
+  return { ...remote, ticketUrl };
 }

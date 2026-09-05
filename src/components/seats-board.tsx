@@ -1,9 +1,11 @@
 "use client";
 
 import { PersonChip } from "@/components/person-chip";
+import { TicketQr } from "@/components/ticket-qr";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { formatSeats } from "@/lib/money";
 import { formatTime } from "@/lib/people";
+import { DEFAULT_TICKET_URL } from "@/lib/tickets";
 import type { Guest, GuestStatus } from "@/lib/types";
 import { GUEST_STATUSES, displayGuestName, telHref } from "@/lib/types";
 import { formatTicketDay } from "@/components/tickets-editor";
@@ -18,6 +20,7 @@ type Props = {
   ticketsSold: number;
   ticketsSoldUpdatedAt: string | null;
   ticketsSoldUpdatedBy: string | null;
+  ticketUrl?: string | null;
   me: string;
   filter: SeatFilter;
   onFilter: (filter: SeatFilter) => void;
@@ -35,6 +38,7 @@ export function SeatsBoard({
   ticketsSold,
   ticketsSoldUpdatedAt,
   ticketsSoldUpdatedBy,
+  ticketUrl = DEFAULT_TICKET_URL,
   me,
   filter,
   onFilter,
@@ -100,6 +104,8 @@ export function SeatsBoard({
       <p className="text-sm text-muted-foreground">
         Call the list, log confirmed / tentative / declined, and how many people are coming.
       </p>
+
+      <TicketQr url={ticketUrl} variant="hero" />
 
       <button
         type="button"

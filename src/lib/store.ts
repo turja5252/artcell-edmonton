@@ -1,5 +1,6 @@
 import { uniqueId } from "@/lib/ids";
 import { DEFAULT_CONCERT_DATE, normalizeConcertDate } from "@/lib/concert-date";
+import { canonicalizeTicketUrl, DEFAULT_TICKET_URL } from "@/lib/tickets";
 import { parseIsoDate } from "@/lib/deliverables";
 import { parseCount, parseMoney } from "@/lib/money";
 import type {
@@ -55,6 +56,7 @@ const DEFAULT_SETTINGS: Settings = {
   ticketsSold: 0,
   ticketsSoldUpdatedAt: null,
   ticketsSoldUpdatedBy: null,
+  ticketUrl: DEFAULT_TICKET_URL,
   concertDate: DEFAULT_CONCERT_DATE,
 };
 
@@ -218,6 +220,7 @@ async function readSettingsFile(): Promise<Settings> {
     ticketsSold: parseCount(parsed.ticketsSold),
     ticketsSoldUpdatedAt: parsed.ticketsSoldUpdatedAt ?? null,
     ticketsSoldUpdatedBy: parsed.ticketsSoldUpdatedBy?.trim() || null,
+    ticketUrl: canonicalizeTicketUrl(parsed.ticketUrl),
     concertDate: normalizeConcertDate(parsed.concertDate),
   };
 }
@@ -961,6 +964,9 @@ export function updateSettings(patch: Partial<Settings>): Promise<Settings> {
         : patch.ticketsSoldUpdatedBy === undefined
           ? current.ticketsSoldUpdatedBy
           : patch.ticketsSoldUpdatedBy?.trim() || null,
+      ticketUrl: canonicalizeTicketUrl(
+        patch.ticketUrl === undefined ? current.ticketUrl : patch.ticketUrl
+      ),
       concertDate:
         patch.concertDate === undefined
           ? current.concertDate

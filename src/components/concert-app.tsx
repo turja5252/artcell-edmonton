@@ -39,6 +39,7 @@ import { TicketsEditor } from "@/components/tickets-editor";
 import { TeamBoard } from "@/components/team-board";
 import { ConcertCountdown } from "@/components/concert-countdown";
 import { DeliverablesBoard } from "@/components/deliverables-board";
+import { TicketQr } from "@/components/ticket-qr";
 import { WhoAmI } from "@/components/who-am-i";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1009,9 +1010,9 @@ export function ConcertApp({
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col px-4 pb-32 sm:px-6">
-      <header className="sticky top-0 z-20 -mx-4 flex items-start justify-between gap-3 border-b border-border/50 bg-background/90 px-4 pt-[max(1.25rem,env(safe-area-inset-top))] pb-3 backdrop-blur-md sm:-mx-6 sm:px-6">
+      <header className="sticky top-0 z-20 -mx-4 flex flex-wrap items-start justify-between gap-3 border-b border-border/50 bg-background/90 px-4 pt-[max(1.25rem,env(safe-area-inset-top))] pb-3 backdrop-blur-md sm:-mx-6 sm:px-6">
         <div
-          className="select-none"
+          className="min-w-0 flex-1 select-none"
           onClick={onBrandActivate}
         >
           <p className="text-[11px] font-medium tracking-[0.22em] text-primary uppercase">
@@ -1022,38 +1023,41 @@ export function ConcertApp({
           </h1>
           <ConcertCountdown concertDate={settings.concertDate} />
         </div>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon-lg"
-            className="size-11"
-            render={<a href="/Artcell-Edmonton-Show.xlsx" download />}
-            aria-label="Download Excel for Microsoft 365"
-          >
-            <FileSpreadsheet />
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon-lg"
-            className="size-11"
-            onClick={() => void shareBoard()}
-            aria-label="Share this board"
-          >
-            <Share2 />
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon-lg"
-            className="size-11"
-            onClick={() => void syncSheet()}
-            disabled={syncing}
-            aria-label="Pull new names from the Google Sheet"
-          >
-            <RefreshCw className={cn(syncing && "animate-spin")} />
-          </Button>
+        <div className="flex shrink-0 items-start gap-2">
+          <TicketQr url={settings.ticketUrl} variant="compact" />
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-lg"
+              className="size-11"
+              render={<a href="/Artcell-Edmonton-Show.xlsx" download />}
+              aria-label="Download Excel for Microsoft 365"
+            >
+              <FileSpreadsheet />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-lg"
+              className="size-11"
+              onClick={() => void shareBoard()}
+              aria-label="Share this board"
+            >
+              <Share2 />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-lg"
+              className="size-11"
+              onClick={() => void syncSheet()}
+              disabled={syncing}
+              aria-label="Pull new names from the Google Sheet"
+            >
+              <RefreshCw className={cn(syncing && "animate-spin")} />
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -1205,6 +1209,7 @@ export function ConcertApp({
             ticketsSold={settings.ticketsSold}
             ticketsSoldUpdatedAt={settings.ticketsSoldUpdatedAt}
             ticketsSoldUpdatedBy={settings.ticketsSoldUpdatedBy}
+            ticketUrl={settings.ticketUrl}
             me={me}
             filter={seatFilter}
             onFilter={setSeatFilter}
