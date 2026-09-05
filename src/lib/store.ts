@@ -22,13 +22,26 @@ import {
   deleteAttachmentFile,
   deleteMediaFile,
   newAttachmentId,
-  newMediaId,
   removeLeadUploadDir,
-  safeDownloadName,
   writeAttachmentFile,
   writeMediaFile,
 } from "@/lib/attachments";
-import { readBoardWriteMeta, readJsonFile, writeJsonFile } from "@/lib/persist";
+import {
+  assertAllowedMedia,
+  ensureMediaFileName,
+  MAX_MEDIA_BLOB_BYTES,
+  MAX_MEDIA_SERVER_BYTES,
+  MEDIA_ID_RE,
+  mediaRelativePath,
+  newMediaId,
+  safeDownloadName,
+} from "@/lib/media-types";
+import {
+  binaryFileExists,
+  readBoardWriteMeta,
+  readJsonFile,
+  writeJsonFile,
+} from "@/lib/persist";
 import type { BoardSnapshot } from "@/lib/types";
 import {
   assertTeamAdminActor,
@@ -95,6 +108,7 @@ function stamp<T extends { updatedAt: string | null; updatedBy: string | null }>
 function normalizeMediaItem(
   raw: Partial<MediaItem> & { id: string; fileName: string }
 ): MediaItem {
+  const duration = Number(raw.durationSeconds);
   return {
     id: raw.id,
     fileName: raw.fileName,
@@ -102,6 +116,7 @@ function normalizeMediaItem(
     size: Number(raw.size) || 0,
     uploadedAt: raw.uploadedAt || new Date().toISOString(),
     uploadedBy: raw.uploadedBy?.trim() || null,
+    durationSeconds: Number.isFinite(duration) && duration > 0 ? duration : null,
   };
 }
 
@@ -923,25 +938,71 @@ export function addMediaItem(input: {
   mimeType: string;
   bytes: Buffer;
   actor?: string | null;
+  durationSeconds?: number | null;
 }): Promise<MediaItem> {
   return enqueue(async () => {
-    const mimeType = assertAllowedAttachment(
+    const mimeType = assertAllowedMedia(
       input.fileName,
       input.mimeType,
-      input.bytes.length
+      input.bytes.length,
+      MAX_MEDIA_SERVER_BYTES
     );
     const members = await readMembersFile();
     const allowedNames = members.map((member) => member.name);
     const items = await readMediaFileList();
     const item = normalizeMediaItem({
       id: newMediaId(),
-      fileName: safeDownloadName(input.fileName),
+      fileName: ensureMediaFileName(input.fileName, mimeType),
       mimeType,
       size: input.bytes.length,
       uploadedAt: new Date().toISOString(),
       uploadedBy: resolveActorName(input.actor, allowedNames),
+      durationSeconds: input.durationSeconds,
     });
     await writeMediaFile(item.id, item.fileName, input.bytes, mimeType);
+    items.push(item);
+    await writeMediaFileList(items);
+    return item;
+  });
+}
+
+export function registerBlobMediaItem(input: {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+  actor?: string | null;
+  durationSeconds?: number | null;
+}): Promise<MediaItem> {
+  return enqueue(async () => {
+    if (!MEDIA_ID_RE.test(input.id)) throw new Error("Invalid media id");
+    const mimeType = assertAllowedMedia(
+      input.fileName,
+      input.mimeType,
+      input.size,
+      MAX_MEDIA_BLOB_BYTES
+    );
+    const fileName = ensureMediaFileName(input.fileName, mimeType);
+    const items = await readMediaFileList();
+    const existing = items.find((row) => row.id === input.id);
+    if (existing) return existing;
+
+    const relative = mediaRelativePath(input.id, fileName, mimeType);
+    if (!(await binaryFileExists(relative))) {
+      throw new Error("Uploaded file was not found in storage");
+    }
+
+    const members = await readMembersFile();
+    const allowedNames = members.map((member) => member.name);
+    const item = normalizeMediaItem({
+      id: input.id,
+      fileName,
+      mimeType,
+      size: input.size,
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: resolveActorName(input.actor, allowedNames),
+      durationSeconds: input.durationSeconds,
+    });
     items.push(item);
     await writeMediaFileList(items);
     return item;

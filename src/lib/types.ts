@@ -136,6 +136,7 @@ export type MediaItem = {
   size: number;
   uploadedAt: string;
   uploadedBy: string | null;
+  durationSeconds?: number | null;
 };
 
 export type BoardSnapshot = {

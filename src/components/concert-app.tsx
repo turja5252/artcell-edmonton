@@ -33,6 +33,7 @@ import { MoneyBoard } from "@/components/money-board";
 import { PersonChip } from "@/components/person-chip";
 import { SeatsBoard, type SeatFilter } from "@/components/seats-board";
 import { MediaBoard } from "@/components/media-board";
+import { uploadMediaFiles } from "@/lib/media-client-upload";
 import { TargetEditor } from "@/components/target-editor";
 import { TicketsEditor } from "@/components/tickets-editor";
 import { TeamBoard } from "@/components/team-board";
@@ -151,6 +152,7 @@ export function ConcertApp({
   const [media, setMedia] = useState<MediaItem[]>(initialMedia);
   const [tab, setTab] = useState<Tab>("outreach");
   const [mediaUploading, setMediaUploading] = useState(false);
+  const [mediaUploadProgress, setMediaUploadProgress] = useState<number | null>(null);
   const [mediaRemovingId, setMediaRemovingId] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("open");
   const [seatFilter, setSeatFilter] = useState<SeatFilter>("not_called");
@@ -885,30 +887,24 @@ export function ConcertApp({
   async function uploadMedia(files: FileList) {
     mediaSaving.current = true;
     setMediaUploading(true);
+    setMediaUploadProgress(0);
     markSaveStart();
     setError("");
     try {
-      const form = new FormData();
-      if (me) form.set("actor", me);
-      for (const file of Array.from(files)) {
-        form.append("files", file);
-      }
-      const response = await fetch("/api/media", {
-        method: "POST",
-        body: form,
+      const uploaded = await uploadMediaFiles(Array.from(files), {
+        actor: me || null,
+        onProgress: setMediaUploadProgress,
       });
-      const data = (await response.json()) as { media?: MediaItem[]; error?: string };
-      if (!response.ok) throw new Error(data.error || "Upload failed");
-      if (data.media?.length) {
-        for (const item of data.media) {
+      if (uploaded.length) {
+        for (const item of uploaded) {
           noteSuccessfulWrite(item.id, item.uploadedAt);
         }
         setMedia((current) => {
           const seen = new Set(current.map((item) => item.id));
-          return [...current, ...data.media!.filter((item) => !seen.has(item.id))];
+          return [...current, ...uploaded.filter((item) => !seen.has(item.id))];
         });
         setToast(
-          data.media.length === 1 ? "File uploaded" : `${data.media.length} files uploaded`
+          uploaded.length === 1 ? "File uploaded" : `${uploaded.length} files uploaded`
         );
       }
     } catch (err) {
@@ -916,6 +912,7 @@ export function ConcertApp({
     } finally {
       mediaSaving.current = false;
       setMediaUploading(false);
+      setMediaUploadProgress(null);
       markSaveEnd();
     }
   }
@@ -1267,6 +1264,7 @@ export function ConcertApp({
           <MediaBoard
             items={media}
             uploading={mediaUploading}
+            uploadProgress={mediaUploadProgress}
             removingId={mediaRemovingId}
             onUpload={(files) => void uploadMedia(files)}
             onDelete={(item) => void deleteMedia(item)}

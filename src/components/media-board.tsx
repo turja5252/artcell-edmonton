@@ -1,9 +1,16 @@
 "use client";
 
-import { useRef } from "react";
-import { Download, FileText, ImageIcon, Trash2, Upload } from "lucide-react";
+import { useRef, useState } from "react";
+import { Download, FileText, Film, ImageIcon, Trash2, Upload } from "lucide-react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  formatByteSize,
+  formatMediaDuration,
+  isPhotoMime,
+  isVideoMime,
+  MEDIA_FILE_ACCEPT,
+} from "@/lib/media-types";
 import { formatTime } from "@/lib/people";
 import type { MediaItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -11,6 +18,7 @@ import { cn } from "@/lib/utils";
 type Props = {
   items: MediaItem[];
   uploading: boolean;
+  uploadProgress?: number | null;
   removingId: string | null;
   error?: string;
   onRetry?: () => void;
@@ -18,15 +26,38 @@ type Props = {
   onDelete: (item: MediaItem) => void;
 };
 
-function formatSize(size: number): string {
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+function kindLabel(item: MediaItem): string {
+  if (isVideoMime(item.mimeType)) return "Video";
+  if (isPhotoMime(item.mimeType)) return "Photo";
+  return "PDF";
+}
+
+function VideoPreview({ src, fileName }: { src: string; fileName: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <div className="flex aspect-video max-h-52 w-full items-center justify-center rounded-xl bg-muted">
+        <Film className="size-8 text-muted-foreground" />
+      </div>
+    );
+  }
+  return (
+    <video
+      src={src}
+      className="aspect-video max-h-52 w-full rounded-xl bg-black object-contain"
+      controls
+      playsInline
+      preload="metadata"
+      onError={() => setFailed(true)}
+      aria-label={fileName}
+    />
+  );
 }
 
 export function MediaBoard({
   items,
   uploading,
+  uploadProgress,
   removingId,
   error,
   onRetry,
@@ -39,16 +70,19 @@ export function MediaBoard({
     (a, b) => Date.parse(b.uploadedAt) - Date.parse(a.uploadedAt)
   );
 
+  const progress =
+    uploading && typeof uploadProgress === "number"
+      ? Math.max(0, Math.min(100, Math.round(uploadProgress)))
+      : null;
+
   return (
     <div className="space-y-3 pb-24">
-      <p className="text-sm text-muted-foreground">
-        Promo photos and PDFs for the show. Anyone can add.
-      </p>
+      <p className="text-sm text-muted-foreground">Promo photos, videos, and PDFs.</p>
 
       <input
         ref={inputRef}
         type="file"
-        accept="image/*,application/pdf,.pdf,.jpg,.jpeg,.png,.webp,.gif,.heic,.heif"
+        accept={MEDIA_FILE_ACCEPT}
         multiple
         className="hidden"
         disabled={uploading}
@@ -67,8 +101,25 @@ export function MediaBoard({
         onClick={() => inputRef.current?.click()}
       >
         <Upload className="size-4" />
-        {uploading ? "Uploading…" : "Upload photo or PDF"}
+        {uploading
+          ? progress !== null
+            ? `Uploading… ${progress}%`
+            : "Uploading…"
+          : "Upload photo, video, or PDF"}
       </Button>
+
+      {uploading && progress !== null ? (
+        <div
+          className="h-1.5 overflow-hidden rounded-full bg-muted"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={progress}
+          aria-label="Upload progress"
+        >
+          <div className="h-full bg-primary transition-all" style={{ width: `${progress}%` }} />
+        </div>
+      ) : null}
 
       {error ? (
         <div className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -85,15 +136,13 @@ export function MediaBoard({
         <div className="rounded-2xl border border-dashed border-border p-6 text-center">
           <ImageIcon className="mx-auto size-8 text-muted-foreground" />
           <p className="mt-3 font-medium">No promo files yet</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Promo photos and PDFs for the show. Anyone can add.
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">Promo photos, videos, and PDFs.</p>
         </div>
       ) : null}
 
       {uploading && sorted.length === 0 ? (
         <div className="rounded-2xl border border-border/80 bg-card/80 p-6 text-center text-sm text-muted-foreground">
-          Uploading…
+          {progress !== null ? `Uploading… ${progress}%` : "Uploading…"}
         </div>
       ) : null}
 
@@ -101,7 +150,11 @@ export function MediaBoard({
         <ul className="space-y-2">
           {sorted.map((item) => {
             const href = `/api/media/${item.id}`;
-            const isPhoto = item.mimeType.startsWith("image/");
+            const isPhoto = isPhotoMime(item.mimeType);
+            const isVideo = isVideoMime(item.mimeType);
+            const duration = item.durationSeconds
+              ? formatMediaDuration(item.durationSeconds)
+              : "";
             return (
               <li key={item.id}>
                 <article
@@ -110,8 +163,10 @@ export function MediaBoard({
                     removingId === item.id && "opacity-60"
                   )}
                 >
-                  <div className="flex gap-3">
-                    {isPhoto ? (
+                  <div className={cn(isVideo ? "space-y-3" : "flex gap-3")}>
+                    {isVideo ? (
+                      <VideoPreview src={href} fileName={item.fileName} />
+                    ) : isPhoto ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={href}
@@ -126,7 +181,9 @@ export function MediaBoard({
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium">{item.fileName}</p>
                       <p className="mt-0.5 text-xs text-muted-foreground">
-                        {isPhoto ? "Photo" : "PDF"} · {formatSize(item.size)}
+                        {kindLabel(item)}
+                        {duration ? ` · ${duration}` : ""}
+                        {` · ${formatByteSize(item.size)}`}
                         {item.uploadedBy ? ` · ${item.uploadedBy}` : ""}
                         {item.uploadedAt ? ` · ${formatTime(item.uploadedAt)}` : ""}
                       </p>
@@ -140,7 +197,9 @@ export function MediaBoard({
                             "h-10 gap-1.5 px-3"
                           )}
                         >
-                          {isPhoto ? (
+                          {isVideo ? (
+                            <Film className="size-3.5" />
+                          ) : isPhoto ? (
                             <ImageIcon className="size-3.5" />
                           ) : (
                             <FileText className="size-3.5" />

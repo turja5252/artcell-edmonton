@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { readMediaFile, safeDownloadName } from "@/lib/attachments";
+import { mediaRelativePath, readMediaFile, safeDownloadName } from "@/lib/attachments";
 import { jsonNoStore } from "@/lib/http";
+import { getBinaryPublicUrl } from "@/lib/persist";
 import { getMediaItem, removeMediaItem } from "@/lib/store";
 
 export const runtime = "nodejs";
@@ -14,8 +15,15 @@ export async function GET(
   try {
     const { id } = await context.params;
     const item = await getMediaItem(id);
-    const bytes = await readMediaFile(item);
     const download = new URL(request.url).searchParams.get("download") === "1";
+    const publicUrl = await getBinaryPublicUrl(
+      mediaRelativePath(item.id, item.fileName, item.mimeType)
+    );
+    if (publicUrl) {
+      return NextResponse.redirect(download ? publicUrl.downloadUrl : publicUrl.url, 302);
+    }
+
+    const bytes = await readMediaFile(item);
     const headers = new Headers({
       "Content-Type": item.mimeType,
       "Content-Length": String(bytes.length),

@@ -410,6 +410,39 @@ export async function readBoardWriteMeta(): Promise<BoardWriteMeta | null> {
   return cached ?? null;
 }
 
+export async function getBinaryPublicUrl(
+  relativePath: string
+): Promise<{ url: string; downloadUrl: string } | null> {
+  if (!useBlobStore()) return null;
+  const pathname = `${PREFIX}/${fileKey(relativePath)}`;
+  try {
+    const meta = await head(pathname);
+    if (meta?.url) {
+      return { url: meta.url, downloadUrl: meta.downloadUrl || meta.url };
+    }
+  } catch {
+    // fall through to list
+  }
+  const match = await listExactBlob(pathname);
+  if (match?.url) {
+    return { url: match.url, downloadUrl: match.downloadUrl || match.url };
+  }
+  return null;
+}
+
+export async function binaryFileExists(relativePath: string): Promise<boolean> {
+  if (useBlobStore()) {
+    const publicUrl = await getBinaryPublicUrl(relativePath);
+    return Boolean(publicUrl);
+  }
+  try {
+    await fs.access(path.join(process.cwd(), "data", relativePath));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function writeBinaryFile(
   relativePath: string,
   bytes: Buffer,
