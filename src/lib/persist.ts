@@ -13,6 +13,7 @@ const LIVE_JSON = new Set([
   "settings.json",
   "deliverables.json",
   "media.json",
+  "media-deleted.json",
 ]);
 
 type CacheEntry = {
@@ -88,14 +89,36 @@ function fileKey(relativePath: string): string {
   return relativePath.replace(/^\/+/, "");
 }
 
+function itemIds(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  const ids: string[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") return null;
+    const id = (item as { id?: unknown }).id;
+    if (typeof id !== "string" || !id) return null;
+    ids.push(id);
+  }
+  return ids;
+}
+
+/** A shorter id-subset is a delete, not an older snapshot (max uploadedAt can drop). */
+function isLikelyDeletion(cached: unknown, incoming: unknown): boolean {
+  const cachedIds = itemIds(cached);
+  const incomingIds = itemIds(incoming);
+  if (!cachedIds || !incomingIds) return false;
+  if (incomingIds.length === 0 || incomingIds.length >= cachedIds.length) return false;
+  const cachedSet = new Set(cachedIds);
+  return incomingIds.every((id) => cachedSet.has(id));
+}
+
 function remember<T>(relativePath: string, value: T, source: "read" | "write" = "read") {
   const key = fileKey(relativePath);
   const freshness = jsonFreshness(value);
   const existing = memoryValues.get(key);
   if (source === "read" && existing) {
     // Never replace a successful write with an older blob / last-known snapshot.
-    if (existing.writeAt > 0 && freshness < existing.writeAt) return;
-    if (freshness < existing.freshness) return;
+    if (existing.writeAt > 0 && freshness <= existing.writeAt) return;
+    if (freshness < existing.freshness && !isLikelyDeletion(existing.value, value)) return;
   }
   const writeAt = source === "write" ? Date.now() : existing?.writeAt ?? 0;
   memoryValues.set(key, {
@@ -246,11 +269,15 @@ function preferCachedIfNewer<T>(key: string, incoming: T): T {
   const cached = recall<T>(key);
   const writeAt = recallWriteAt(key);
   const incomingFreshness = jsonFreshness(incoming);
-  if (cached !== undefined && writeAt > 0 && incomingFreshness < writeAt) {
+  if (cached !== undefined && writeAt > 0 && incomingFreshness <= writeAt) {
     return cached;
   }
   const cachedFreshness = jsonFreshness(cached);
   if (cached !== undefined && incomingFreshness < cachedFreshness) {
+    if (isLikelyDeletion(cached, incoming)) {
+      remember(key, incoming, "read");
+      return incoming;
+    }
     return cached;
   }
   remember(key, incoming, "read");

@@ -17,7 +17,6 @@ import {
   Handshake,
   ImageIcon,
   Plus,
-  RefreshCw,
   Search,
   Share2,
   Shield,
@@ -162,7 +161,6 @@ export function ConcertApp({
   const [activeGuest, setActiveGuest] = useState<Guest | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [toast, setToast] = useState("");
-  const [syncing, setSyncing] = useState(false);
   const [targetKind, setTargetKind] = useState<"money" | "seats" | null>(null);
   const [ticketsOpen, setTicketsOpen] = useState(false);
   const savingCount = useRef(0);
@@ -229,16 +227,40 @@ export function ConcertApp({
       settings?: Settings;
       deliverables?: Deliverable[];
       media?: MediaItem[];
+      mediaDeletedIds?: string[];
     },
     mode: "poll" | "replace"
   ) {
+    if (data.mediaDeletedIds?.length) {
+      for (const id of data.mediaDeletedIds) deletedIds.current.media.add(id);
+    }
     if (mode === "replace") {
-      if (data.leads) setLeads(data.leads);
-      if (data.guests) setGuests(data.guests);
-      if (data.members) setMembers(data.members);
+      if (data.leads) {
+        setLeads(data.leads.filter((item) => !deletedIds.current.leads.has(item.id)));
+      }
+      if (data.guests) {
+        setGuests(data.guests.filter((item) => !deletedIds.current.guests.has(item.id)));
+      }
+      if (data.members) {
+        setMembers(data.members.filter((item) => !deletedIds.current.members.has(item.id)));
+      }
       if (data.settings) setSettings(data.settings);
-      if (data.deliverables) setDeliverables(data.deliverables);
-      if (data.media) setMedia(data.media);
+      if (data.deliverables) {
+        setDeliverables(
+          data.deliverables.filter((item) => !deletedIds.current.deliverables.has(item.id))
+        );
+      }
+      if (data.media) {
+        setMedia((current) =>
+          mergeMedia(
+            current,
+            data.media!,
+            deletedIds.current.media,
+            busyIdRef.current,
+            lastWriteById.current
+          )
+        );
+      }
       return;
     }
     if (data.leads) {
@@ -315,6 +337,7 @@ export function ConcertApp({
       settings?: Settings;
       deliverables?: Deliverable[];
       media?: MediaItem[];
+      mediaDeletedIds?: string[];
       writtenAt?: string | null;
       error?: string;
     };
@@ -947,35 +970,6 @@ export function ConcertApp({
     }
   }
 
-  async function syncSheet() {
-    setSyncing(true);
-    setError("");
-    try {
-      const response = await fetch("/api/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ actor: me }),
-      });
-      const data = (await response.json()) as {
-        leads?: Lead[];
-        added?: number;
-        error?: string;
-      };
-      if (!response.ok) throw new Error(data.error || "Sync failed");
-      if (data.leads) {
-        noteSuccessfulWrite("sheet-sync", new Date().toISOString());
-        setLeads(data.leads);
-      }
-      setToast(
-        data.added ? `Added ${data.added} new name${data.added === 1 ? "" : "s"} from the sheet` : "Sheet is already in sync"
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Sync failed");
-    } finally {
-      setSyncing(false);
-    }
-  }
-
   async function shareBoard() {
     const url = window.location.href;
     const text = "Artcell Edmonton outreach board — tap your name and update as you call.";
@@ -1046,17 +1040,6 @@ export function ConcertApp({
             >
               <Share2 />
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon-lg"
-              className="size-11"
-              onClick={() => void syncSheet()}
-              disabled={syncing}
-              aria-label="Pull new names from the Google Sheet"
-            >
-              <RefreshCw className={cn(syncing && "animate-spin")} />
-            </Button>
           </div>
         </div>
       </header>
@@ -1117,7 +1100,7 @@ export function ConcertApp({
             className="ml-2 h-8"
             onClick={() => {
               setError("");
-              void load("replace");
+              void load("poll");
             }}
           >
             Retry

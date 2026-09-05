@@ -142,6 +142,7 @@ export type BoardSnapshot = {
   settings: Settings;
   deliverables: Deliverable[];
   media: MediaItem[];
+  mediaDeletedIds: string[];
   writtenAt: string | null;
 };
 

@@ -49,6 +49,12 @@ const MEMBERS_FILE = "members.json";
 const SETTINGS_FILE = "settings.json";
 const DELIVERABLES_FILE = "deliverables.json";
 const MEDIA_FILE = "media.json";
+const MEDIA_DELETED_FILE = "media-deleted.json";
+
+type MediaDeleted = {
+  ids: string[];
+  updatedAt: string;
+};
 
 const DEFAULT_SETTINGS: Settings = {
   moneyTarget: 0,
@@ -305,11 +311,33 @@ async function writeDeliverablesFile(items: Deliverable[]) {
   await writeJsonFile(DELIVERABLES_FILE, items);
 }
 
-async function readMediaFileList(): Promise<MediaItem[]> {
-  const parsed = await readJsonFile<MediaItem[]>(MEDIA_FILE, []);
-  return parsed
+async function readMediaDeletedIds(): Promise<Set<string>> {
+  const parsed = await readJsonFile<MediaDeleted>(MEDIA_DELETED_FILE, {
+    ids: [],
+    updatedAt: "",
+  });
+  return new Set(
+    Array.isArray(parsed.ids) ? parsed.ids.filter((id): id is string => typeof id === "string" && Boolean(id)) : []
+  );
+}
+
+async function writeMediaDeletedIds(ids: Set<string>) {
+  await writeJsonFile(MEDIA_DELETED_FILE, {
+    ids: [...ids],
+    updatedAt: new Date().toISOString(),
+  } satisfies MediaDeleted);
+}
+
+function normalizeMediaRows(rows: MediaItem[]): MediaItem[] {
+  return rows
     .filter((item): item is MediaItem => Boolean(item?.id && item?.fileName))
     .map((item) => normalizeMediaItem(item));
+}
+
+async function readMediaFileList(): Promise<MediaItem[]> {
+  const parsed = await readJsonFile<MediaItem[]>(MEDIA_FILE, []);
+  const deleted = await readMediaDeletedIds();
+  return normalizeMediaRows(parsed).filter((item) => !deleted.has(item.id));
 }
 
 async function writeMediaFileList(items: MediaItem[]) {
@@ -349,6 +377,7 @@ export function getBoard(): Promise<BoardSnapshot> {
     const guestsOriginal = await readGuestsFile();
     const deliverablesOriginal = await readDeliverablesFile();
     const mediaOriginal = await readMediaFileList();
+    const mediaDeletedIds = [...(await readMediaDeletedIds())];
     const settings = await readSettingsFile();
     const meta = await readBoardWriteMeta();
 
@@ -400,7 +429,7 @@ export function getBoard(): Promise<BoardSnapshot> {
           ? new Date(computed).toISOString()
           : metaStamp;
 
-    return { leads, guests, members, settings, deliverables, media, writtenAt };
+    return { leads, guests, members, settings, deliverables, media, mediaDeletedIds, writtenAt };
   });
 }
 
@@ -911,11 +940,14 @@ export function addMediaItem(input: {
 
 export function removeMediaItem(id: string): Promise<void> {
   return enqueue(async () => {
-    const items = await readMediaFileList();
-    const item = items.find((row) => row.id === id);
-    if (!item) throw new Error("File not found");
-    await deleteMediaFile(item);
-    await writeMediaFileList(items.filter((row) => row.id !== id));
+    const raw = normalizeMediaRows(await readJsonFile<MediaItem[]>(MEDIA_FILE, []));
+    const deleted = await readMediaDeletedIds();
+    const item = raw.find((row) => row.id === id);
+    if (!item && !deleted.has(id)) throw new Error("File not found");
+    if (item) await deleteMediaFile(item);
+    deleted.add(id);
+    await writeMediaFileList(raw.filter((row) => row.id !== id && !deleted.has(row.id)));
+    await writeMediaDeletedIds(deleted);
   });
 }
 
