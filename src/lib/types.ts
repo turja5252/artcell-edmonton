@@ -63,6 +63,14 @@ export type GuestStatus =
   | "reminded"
   | "maybe";
 
+export type ContactVia = "call" | "text";
+
+export type ContactEvent = {
+  at: string;
+  via: ContactVia;
+  by: string | null;
+};
+
 export type Guest = {
   id: string;
   firstName: string;
@@ -75,6 +83,12 @@ export type Guest = {
   partySize: number;
   ticketBought: boolean;
   lastContactedAt: string | null;
+  lastContactedVia: ContactVia | null;
+  lastCalledAt: string | null;
+  lastCalledBy: string | null;
+  lastTextedAt: string | null;
+  lastTextedBy: string | null;
+  contactLog: ContactEvent[];
   notes: string;
   updatedAt: string | null;
   updatedBy: string | null;
@@ -93,10 +107,17 @@ export type GuestPatch = Partial<
     | "partySize"
     | "ticketBought"
     | "lastContactedAt"
+    | "lastContactedVia"
+    | "lastCalledAt"
+    | "lastCalledBy"
+    | "lastTextedAt"
+    | "lastTextedBy"
+    | "contactLog"
     | "notes"
   >
 > & {
   actor?: string | null;
+  contactVia?: ContactVia | null;
 };
 
 export type Settings = {
@@ -364,6 +385,40 @@ export const MONEY_CHIPS = [250, 500, 1000, 2000, 5000];
 
 export const REMINDER_TEXT =
   "Hey! Reminder about the Artcell Edmonton show — grab your tickets and come through. Let me know if you need the link.";
+
+export function normalizeContactVia(value: string | null | undefined): ContactVia | null {
+  return value === "call" || value === "text" ? value : null;
+}
+
+export function normalizeContactLog(value: unknown): ContactEvent[] {
+  if (!Array.isArray(value)) return [];
+  const rows: ContactEvent[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Partial<ContactEvent>;
+    const via = normalizeContactVia(row.via);
+    const at = typeof row.at === "string" ? row.at : "";
+    if (!via || !at) continue;
+    rows.push({
+      at,
+      via,
+      by: typeof row.by === "string" && row.by.trim() ? row.by.trim() : null,
+    });
+  }
+  return rows.slice(0, 8);
+}
+
+export function latestContact(guest: Guest, via: ContactVia): ContactEvent | null {
+  return normalizeContactLog(guest.contactLog).find((event) => event.via === via) ?? null;
+}
+
+export function hasBeenCalled(guest: Guest): boolean {
+  return Boolean(guest.lastCalledAt || latestContact(guest, "call"));
+}
+
+export function hasBeenTexted(guest: Guest): boolean {
+  return Boolean(guest.lastTextedAt || latestContact(guest, "text"));
+}
 
 export function inviteSmsBody(ticketUrl?: string | null): string {
   const link = (ticketUrl ?? "").trim();

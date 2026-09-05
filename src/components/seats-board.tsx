@@ -6,13 +6,30 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { formatSeats } from "@/lib/money";
 import { formatTime } from "@/lib/people";
 import { DEFAULT_TICKET_URL } from "@/lib/tickets";
-import type { Guest, GuestStatus } from "@/lib/types";
-import { GUEST_STATUSES, displayGuestName, inviteSmsBody, smsHref, telHref } from "@/lib/types";
+import type { ContactVia, Guest, GuestStatus } from "@/lib/types";
+import {
+  GUEST_STATUSES,
+  displayGuestName,
+  hasBeenCalled,
+  hasBeenTexted,
+  inviteSmsBody,
+  smsHref,
+  telHref,
+} from "@/lib/types";
 import { formatTicketDay } from "@/components/tickets-editor";
 import { cn } from "@/lib/utils";
 import { MessageSquare, Phone } from "lucide-react";
 
-export type SeatFilter = "all" | "not_called" | "confirmed" | "tentative" | "declined" | "mine";
+export type SeatFilter =
+  | "all"
+  | "not_called"
+  | "confirmed"
+  | "tentative"
+  | "declined"
+  | "mine"
+  | "called"
+  | "texted"
+  | "not_reached";
 
 type Props = {
   guests: Guest[];
@@ -30,6 +47,7 @@ type Props = {
   onClaim: (guest: Guest) => void;
   onStatus: (guest: Guest, status: GuestStatus) => void;
   onPartySize: (guest: Guest, partySize: number) => void;
+  onContact: (guest: Guest, via: ContactVia) => void;
 };
 
 export function SeatsBoard({
@@ -48,6 +66,7 @@ export function SeatsBoard({
   onClaim,
   onStatus,
   onPartySize,
+  onContact,
 }: Props) {
   const seats = (status: GuestStatus) =>
     guests.filter((guest) => guest.status === status).reduce((sum, guest) => sum + guest.partySize, 0);
@@ -62,6 +81,9 @@ export function SeatsBoard({
     .filter((guest) => {
       if (filter === "mine") return Boolean(me) && guest.assignedTo === me;
       if (filter === "all") return true;
+      if (filter === "called") return hasBeenCalled(guest);
+      if (filter === "texted") return hasBeenTexted(guest);
+      if (filter === "not_reached") return !hasBeenCalled(guest) && !hasBeenTexted(guest);
       return guest.status === filter;
     })
     .sort(
@@ -90,6 +112,21 @@ export function SeatsBoard({
       id: "declined",
       label: "Declined",
       count: guests.filter((g) => g.status === "declined").length,
+    },
+    {
+      id: "not_reached",
+      label: "Not reached",
+      count: guests.filter((g) => !hasBeenCalled(g) && !hasBeenTexted(g)).length,
+    },
+    {
+      id: "called",
+      label: "Called",
+      count: guests.filter((g) => hasBeenCalled(g)).length,
+    },
+    {
+      id: "texted",
+      label: "Texted",
+      count: guests.filter((g) => hasBeenTexted(g)).length,
     },
     {
       id: "mine",
@@ -174,10 +211,28 @@ export function SeatsBoard({
       {visible.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border p-6 text-center">
           <p className="font-medium">
-            {guests.length === 0 ? "No one on the call list yet" : "No matches in this filter"}
+            {guests.length === 0
+              ? "No one on the call list yet"
+              : filter === "not_reached"
+                ? "Everyone here has a call or text logged"
+                : filter === "called"
+                  ? "Nobody has a call logged yet"
+                  : filter === "texted"
+                    ? "Nobody has a text logged yet"
+                    : filter === "mine" && !me
+                      ? "Pick your name under Updating as"
+                      : filter === "mine"
+                        ? "Nothing assigned to you on this list"
+                        : "No matches in this filter"}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Tap + to add a person with name, phone, and email.
+            {guests.length === 0
+              ? "Tap + to add a person with name, phone, and email."
+              : filter === "not_reached"
+                ? "Tap Call or Text on a card to log who reached them."
+                : filter === "called" || filter === "texted"
+                  ? "Those labels appear after someone taps Call or Text."
+                  : "Try another filter, or tap + to add someone."}
           </p>
         </div>
       ) : (
@@ -205,6 +260,20 @@ export function SeatsBoard({
                             {guest.partySize === 1 ? "member" : "members"}
                           </span>
                           <StatusPill status={guest.status} />
+                          {hasBeenCalled(guest) ? (
+                            <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-[11px] font-medium text-sky-300">
+                              Called
+                              {guest.lastCalledAt ? ` ${formatTime(guest.lastCalledAt)}` : ""}
+                              {guest.lastCalledBy ? ` · ${guest.lastCalledBy}` : ""}
+                            </span>
+                          ) : null}
+                          {hasBeenTexted(guest) ? (
+                            <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-[11px] font-medium text-violet-300">
+                              Texted
+                              {guest.lastTextedAt ? ` ${formatTime(guest.lastTextedAt)}` : ""}
+                              {guest.lastTextedBy ? ` · ${guest.lastTextedBy}` : ""}
+                            </span>
+                          ) : null}
                         </div>
                         {guest.phone ? (
                           <p className="mt-1 text-sm text-muted-foreground">{guest.phone}</p>
@@ -240,6 +309,7 @@ export function SeatsBoard({
                         <a
                           href={callHref}
                           className={cn(buttonVariants({ variant: "default" }), "h-12 gap-1 px-2")}
+                          onClick={() => onContact(guest, "call")}
                         >
                           <Phone className="size-4" />
                           Call
@@ -247,6 +317,7 @@ export function SeatsBoard({
                         <a
                           href={textHref}
                           className={cn(buttonVariants({ variant: "secondary" }), "h-12 gap-1 px-2")}
+                          onClick={() => onContact(guest, "text")}
                         >
                           <MessageSquare className="size-4" />
                           Text

@@ -53,6 +53,7 @@ import {
   parseUpdatedAt,
   snapshotStamp,
 } from "@/lib/board-sync";
+import { applyGuestPatch } from "@/lib/guest-patch";
 import { formatMoney } from "@/lib/money";
 import { formatTime } from "@/lib/people";
 import type { Deliverable, Guest, GuestStatus, Lead, MediaItem, Member, Settings } from "@/lib/types";
@@ -673,32 +674,21 @@ export function ConcertApp({
     }
   }
 
-  async function saveGuest(id: string, patch: Partial<Guest> & { actor?: string }) {
+  async function saveGuest(id: string, patch: Partial<Guest> & { actor?: string; contactVia?: "call" | "text" }) {
     setBusyId(id);
     busyIdRef.current = id;
     markSaveStart();
+    const contactedAt = patch.contactVia ? new Date().toISOString() : null;
     setGuests((current) =>
       current.map((guest) =>
         guest.id === id
-          ? {
-              ...guest,
-              ...patch,
-              assignedTo:
-                patch.assignedTo === undefined ? guest.assignedTo : patch.assignedTo,
-              updatedAt: new Date().toISOString(),
-              updatedBy: patch.actor ?? me ?? guest.updatedBy,
-            }
+          ? applyGuestPatch(guest, patch, contactedAt, me)
           : guest
       )
     );
     setActiveGuest((current) =>
       current && current.id === id
-        ? {
-            ...current,
-            ...patch,
-            assignedTo:
-              patch.assignedTo === undefined ? current.assignedTo : patch.assignedTo,
-          }
+        ? applyGuestPatch(current, patch, contactedAt, me)
         : current
     );
     try {
@@ -1217,6 +1207,10 @@ export function ConcertApp({
             onPartySize={(guest, partySize) => {
               void saveGuest(guest.id, { partySize, actor: me });
             }}
+            onContact={(guest, via) => {
+              void saveGuest(guest.id, { contactVia: via, actor: me });
+              setToast(via === "call" ? "Logged as called" : "Logged as texted");
+            }}
           />
         </section>
       )}
@@ -1388,6 +1382,11 @@ export function ConcertApp({
         }}
         onSave={saveGuest}
         busy={busyId === activeGuest?.id}
+        onContact={(via) => {
+          if (!activeGuest) return;
+          void saveGuest(activeGuest.id, { contactVia: via, actor: me });
+          setToast(via === "call" ? "Logged as called" : "Logged as texted");
+        }}
       />
       <TargetEditor
         open={targetKind === "money"}

@@ -18,12 +18,17 @@ import {
 import {
   GUEST_STATUSES,
   displayGuestName,
+  hasBeenCalled,
+  hasBeenTexted,
   inviteSmsBody,
+  normalizeContactLog,
   smsHref,
   telHref,
+  type ContactVia,
   type Guest,
   type GuestStatus,
 } from "@/lib/types";
+import { formatTime } from "@/lib/people";
 import { DEFAULT_TICKET_URL } from "@/lib/tickets";
 import { cn } from "@/lib/utils";
 
@@ -33,9 +38,13 @@ type Props = {
   me: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (id: string, patch: Partial<Guest> & { actor?: string }) => Promise<void>;
+  onSave: (
+    id: string,
+    patch: Partial<Guest> & { actor?: string; contactVia?: ContactVia }
+  ) => Promise<void>;
   busy?: boolean;
   ticketUrl?: string | null;
+  onContact?: (via: ContactVia) => void;
 };
 
 export function GuestEditor({
@@ -47,6 +56,7 @@ export function GuestEditor({
   onSave,
   busy,
   ticketUrl,
+  onContact,
 }: Props) {
   if (!guest) return null;
   return (
@@ -60,6 +70,7 @@ export function GuestEditor({
       onSave={onSave}
       busy={busy}
       ticketUrl={ticketUrl}
+      onContact={onContact}
     />
   );
 }
@@ -73,6 +84,7 @@ function GuestEditorForm({
   onSave,
   busy,
   ticketUrl,
+  onContact,
 }: Props & { guest: Guest }) {
   const [firstName, setFirstName] = useState(guest.firstName || "");
   const [lastName, setLastName] = useState(guest.lastName || "");
@@ -84,6 +96,7 @@ function GuestEditorForm({
   const [notes, setNotes] = useState(guest.notes);
   const callHref = telHref(phone);
   const textHref = smsHref(phone, inviteSmsBody(ticketUrl ?? DEFAULT_TICKET_URL));
+  const contactLog = normalizeContactLog(guest.contactLog);
 
   async function persist(next: {
     firstName?: string;
@@ -142,6 +155,7 @@ function GuestEditorForm({
               <a
                 href={callHref}
                 className={cn(buttonVariants({ variant: "default" }), "h-14 gap-2 text-base")}
+                onClick={() => onContact?.("call")}
               >
                 <Phone className="size-5" />
                 Call
@@ -149,11 +163,66 @@ function GuestEditorForm({
               <a
                 href={textHref}
                 className={cn(buttonVariants({ variant: "secondary" }), "h-14 gap-2 text-base")}
+                onClick={() => onContact?.("text")}
               >
                 <MessageSquare className="size-5" />
                 Text
               </a>
             </div>
+          ) : (
+            <p className="rounded-xl border border-dashed border-border px-3 py-3 text-sm text-muted-foreground">
+              Add a phone number to call or text. The text opens Messages with the MacEwan ticket link.
+            </p>
+          )}
+
+          {hasBeenCalled(guest) || hasBeenTexted(guest) ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {hasBeenCalled(guest) ? (
+                <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-[11px] font-medium text-sky-300">
+                  Called
+                  {guest.lastCalledAt ? ` ${formatTime(guest.lastCalledAt)}` : ""}
+                  {guest.lastCalledBy ? ` · ${guest.lastCalledBy}` : ""}
+                </span>
+              ) : null}
+              {hasBeenTexted(guest) ? (
+                <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-[11px] font-medium text-violet-300">
+                  Texted
+                  {guest.lastTextedAt ? ` ${formatTime(guest.lastTextedAt)}` : ""}
+                  {guest.lastTextedBy ? ` · ${guest.lastTextedBy}` : ""}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+
+          {contactLog.length > 0 ? (
+            <section className="space-y-2">
+              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                Contact log
+              </p>
+              <ul className="space-y-1.5">
+                {contactLog.map((event, index) => (
+                  <li
+                    key={`${event.at}-${event.via}-${index}`}
+                    className="flex items-center justify-between gap-2 text-sm"
+                  >
+                    <span
+                      className={cn(
+                        "rounded-full px-2 py-0.5 text-[11px] font-medium",
+                        event.via === "call"
+                          ? "bg-sky-500/15 text-sky-300"
+                          : "bg-violet-500/15 text-violet-300"
+                      )}
+                    >
+                      {event.via === "call" ? "Called" : "Texted"}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {formatTime(event.at)}
+                      {event.by ? ` · ${event.by}` : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
           ) : null}
 
           <section className="space-y-2">

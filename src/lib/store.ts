@@ -16,7 +16,16 @@ import type {
   MemberPatch,
   Settings,
 } from "@/lib/types";
-import { displayGuestName, normalizeGuestStatus, resolveLeadDeclined } from "@/lib/types";
+import { applyGuestPatch } from "@/lib/guest-patch";
+import {
+  displayGuestName,
+  normalizeContactLog,
+  normalizeContactVia,
+  normalizeGuestStatus,
+  resolveLeadDeclined,
+} from "@/lib/types";
+
+export { applyGuestPatch } from "@/lib/guest-patch";
 import {
   assertAllowedAttachment,
   deleteAttachmentFile,
@@ -190,6 +199,12 @@ function normalizeGuest(
     partySize: Math.max(1, parseCount(guest.partySize) || 1),
     ticketBought: Boolean(guest.ticketBought),
     lastContactedAt: guest.lastContactedAt ?? null,
+    lastContactedVia: normalizeContactVia(guest.lastContactedVia),
+    lastCalledAt: guest.lastCalledAt ?? null,
+    lastCalledBy: guest.lastCalledBy?.trim() || null,
+    lastTextedAt: guest.lastTextedAt ?? null,
+    lastTextedBy: guest.lastTextedBy?.trim() || null,
+    contactLog: normalizeContactLog(guest.contactLog),
     notes: guest.notes ?? "",
     updatedAt: guest.updatedAt ?? null,
     updatedBy: rewriteStoredPersonName(guest.updatedBy) ?? guest.updatedBy ?? null,
@@ -812,6 +827,12 @@ function buildGuest(
       partySize: input.partySize ?? 1,
       ticketBought: false,
       lastContactedAt: null,
+      lastContactedVia: null,
+      lastCalledAt: null,
+      lastCalledBy: null,
+      lastTextedAt: null,
+      lastTextedBy: null,
+      contactLog: [],
       notes: "",
       updatedAt: null,
       updatedBy: null,
@@ -828,34 +849,26 @@ export function patchGuest(id: string, patch: GuestPatch): Promise<Guest> {
     const current = guests[index];
     const members = await readMembersFile();
     const allowedNames = members.map((member) => member.name);
-    const firstName =
-      patch.firstName === undefined ? current.firstName : patch.firstName.trim();
-    const lastName =
-      patch.lastName === undefined ? current.lastName : patch.lastName.trim();
-    const nameFromParts = `${firstName} ${lastName}`.trim();
+    const via = normalizeContactVia(patch.contactVia);
+    const now = via ? new Date().toISOString() : null;
+    const assignedTo =
+      patch.assignedTo === undefined
+        ? resolveAssignee(current.assignedTo, allowedNames)
+        : resolveAssignee(patch.assignedTo, allowedNames);
     const next = stamp(
-      normalizeGuest({
-        ...current,
-        firstName,
-        lastName,
-        name: nameFromParts || patch.name?.trim() || current.name,
-        phone: patch.phone === undefined ? current.phone : patch.phone,
-        email: patch.email === undefined ? current.email : patch.email,
-        assignedTo:
-          patch.assignedTo === undefined
-            ? resolveAssignee(current.assignedTo, allowedNames)
-            : resolveAssignee(patch.assignedTo, allowedNames),
-        status: patch.status ?? current.status,
-        partySize: patch.partySize === undefined ? current.partySize : patch.partySize,
-        ticketBought:
-          patch.ticketBought === undefined ? current.ticketBought : patch.ticketBought,
-        lastContactedAt:
-          patch.lastContactedAt === undefined
-            ? current.lastContactedAt
-            : patch.lastContactedAt,
-        notes: patch.notes === undefined ? current.notes : patch.notes,
-      }),
-      patch.actor
+      normalizeGuest(
+        applyGuestPatch(
+          current,
+          {
+            ...patch,
+            assignedTo,
+          },
+          now,
+          patch.actor
+        )
+      ),
+      patch.actor,
+      allowedNames
     );
     guests[index] = next;
     await writeGuestsFile(guests);
