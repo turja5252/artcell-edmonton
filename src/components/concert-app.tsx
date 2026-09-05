@@ -1381,6 +1381,7 @@ export function ConcertApp({
         guest={activeGuest}
         people={people}
         me={me}
+        ticketUrl={settings.ticketUrl}
         open={Boolean(activeGuest)}
         onOpenChange={(open) => {
           if (!open) setActiveGuest(null);

@@ -7,10 +7,10 @@ import { formatSeats } from "@/lib/money";
 import { formatTime } from "@/lib/people";
 import { DEFAULT_TICKET_URL } from "@/lib/tickets";
 import type { Guest, GuestStatus } from "@/lib/types";
-import { GUEST_STATUSES, displayGuestName, telHref } from "@/lib/types";
+import { GUEST_STATUSES, displayGuestName, inviteSmsBody, smsHref, telHref } from "@/lib/types";
 import { formatTicketDay } from "@/components/tickets-editor";
 import { cn } from "@/lib/utils";
-import { Phone } from "lucide-react";
+import { MessageSquare, Phone } from "lucide-react";
 
 export type SeatFilter = "all" | "not_called" | "confirmed" | "tentative" | "declined" | "mine";
 
@@ -102,7 +102,7 @@ export function SeatsBoard({
   return (
     <div className="space-y-4 pb-24">
       <p className="text-sm text-muted-foreground">
-        Call the list, log confirmed / tentative / declined, and how many people are coming.
+        Call or text the list, log confirmed / tentative / declined, and how many people are coming.
       </p>
 
       <TicketQr url={ticketUrl} variant="hero" />
@@ -184,6 +184,7 @@ export function SeatsBoard({
         <ul className="space-y-2">
           {visible.map((guest) => {
             const callHref = telHref(guest.phone);
+            const textHref = smsHref(guest.phone, inviteSmsBody(ticketUrl));
             return (
               <li key={guest.id}>
                 <article className="rounded-2xl border border-border/80 bg-card/80 p-3">
@@ -228,15 +229,29 @@ export function SeatsBoard({
                     ) : null}
                   </button>
 
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    {callHref ? (
-                      <a
-                        href={callHref}
-                        className={cn(buttonVariants({ variant: "default" }), "h-12 gap-2")}
-                      >
-                        <Phone className="size-4" />
-                        Call
-                      </a>
+                  <div
+                    className={cn(
+                      "mt-3 grid gap-2",
+                      callHref ? "grid-cols-3" : "grid-cols-2"
+                    )}
+                  >
+                    {callHref && textHref ? (
+                      <>
+                        <a
+                          href={callHref}
+                          className={cn(buttonVariants({ variant: "default" }), "h-12 gap-1 px-2")}
+                        >
+                          <Phone className="size-4" />
+                          Call
+                        </a>
+                        <a
+                          href={textHref}
+                          className={cn(buttonVariants({ variant: "secondary" }), "h-12 gap-1 px-2")}
+                        >
+                          <MessageSquare className="size-4" />
+                          Text
+                        </a>
+                      </>
                     ) : (
                       <Button
                         type="button"

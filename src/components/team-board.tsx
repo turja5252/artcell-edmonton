@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Phone, Plus, Trash2 } from "lucide-react";
+import { MessageSquare, Pencil, Phone, Plus, Trash2 } from "lucide-react";
 
 import { PersonChip } from "@/components/person-chip";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Sheet,
@@ -14,7 +14,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import type { Guest, Lead, Member } from "@/lib/types";
+import { smsHref, telHref, type Guest, type Lead, type Member } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import { samePerson } from "@/lib/team-admin";
 
 type Props = {
@@ -253,6 +254,24 @@ export function TeamBoard({
                       ) : null}
                     </div>
                   </div>
+                  {telHref(row.member.phone) && smsHref(row.member.phone) ? (
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <a
+                        href={telHref(row.member.phone)!}
+                        className={cn(buttonVariants({ variant: "default" }), "h-11 gap-2")}
+                      >
+                        <Phone className="size-4" />
+                        Call
+                      </a>
+                      <a
+                        href={smsHref(row.member.phone)!}
+                        className={cn(buttonVariants({ variant: "secondary" }), "h-11 gap-2")}
+                      >
+                        <MessageSquare className="size-4" />
+                        Text
+                      </a>
+                    </div>
+                  ) : null}
                 </div>
               </li>
             );

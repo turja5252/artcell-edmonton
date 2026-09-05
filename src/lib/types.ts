@@ -332,12 +332,25 @@ export function displayGuestName(guest: {
   return combined || guest.name || "Unknown";
 }
 
-export function telHref(phone: string): string | null {
+export function e164Canada(phone: string): string | null {
   const digits = phone.replace(/\D/g, "");
   if (digits.length < 10) return null;
   const local = digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
   if (local.length !== 10) return null;
-  return `tel:+1${local}`;
+  return `+1${local}`;
+}
+
+export function telHref(phone: string): string | null {
+  const e164 = e164Canada(phone);
+  return e164 ? `tel:${e164}` : null;
+}
+
+/** Opens the phone SMS app. Optional body is prefilled (iPhone + Android). */
+export function smsHref(phone: string, body?: string): string | null {
+  const e164 = e164Canada(phone);
+  if (!e164) return null;
+  if (!body?.trim()) return `sms:${e164}`;
+  return `sms:${e164}?body=${encodeURIComponent(body.trim())}`;
 }
 
 export function normalizeGuestStatus(status: string | undefined | null): GuestStatus {
@@ -351,3 +364,11 @@ export const MONEY_CHIPS = [250, 500, 1000, 2000, 5000];
 
 export const REMINDER_TEXT =
   "Hey! Reminder about the Artcell Edmonton show — grab your tickets and come through. Let me know if you need the link.";
+
+export function inviteSmsBody(ticketUrl?: string | null): string {
+  const link = (ticketUrl ?? "").trim();
+  if (link) {
+    return `Hey! Artcell is in Edmonton Sep 20. Tickets: ${link}`;
+  }
+  return REMINDER_TEXT;
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Phone } from "lucide-react";
+import { MessageSquare, Phone } from "lucide-react";
 
 import { PersonChip } from "@/components/person-chip";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -18,10 +18,13 @@ import {
 import {
   GUEST_STATUSES,
   displayGuestName,
+  inviteSmsBody,
+  smsHref,
   telHref,
   type Guest,
   type GuestStatus,
 } from "@/lib/types";
+import { DEFAULT_TICKET_URL } from "@/lib/tickets";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -32,6 +35,7 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   onSave: (id: string, patch: Partial<Guest> & { actor?: string }) => Promise<void>;
   busy?: boolean;
+  ticketUrl?: string | null;
 };
 
 export function GuestEditor({
@@ -42,6 +46,7 @@ export function GuestEditor({
   onOpenChange,
   onSave,
   busy,
+  ticketUrl,
 }: Props) {
   if (!guest) return null;
   return (
@@ -54,6 +59,7 @@ export function GuestEditor({
       onOpenChange={onOpenChange}
       onSave={onSave}
       busy={busy}
+      ticketUrl={ticketUrl}
     />
   );
 }
@@ -66,6 +72,7 @@ function GuestEditorForm({
   onOpenChange,
   onSave,
   busy,
+  ticketUrl,
 }: Props & { guest: Guest }) {
   const [firstName, setFirstName] = useState(guest.firstName || "");
   const [lastName, setLastName] = useState(guest.lastName || "");
@@ -76,6 +83,7 @@ function GuestEditorForm({
   const [partySize, setPartySize] = useState(String(guest.partySize));
   const [notes, setNotes] = useState(guest.notes);
   const callHref = telHref(phone);
+  const textHref = smsHref(phone, inviteSmsBody(ticketUrl ?? DEFAULT_TICKET_URL));
 
   async function persist(next: {
     firstName?: string;
@@ -124,19 +132,28 @@ function GuestEditorForm({
             {displayGuestName({ firstName, lastName, name: guest.name })}
           </SheetTitle>
           <SheetDescription>
-            Call them, set the response, how many members, and who on the team owns this.
+            Call or text them, set the response, how many members, and who on the team owns this.
           </SheetDescription>
         </SheetHeader>
 
         <div className="mt-4 space-y-5">
-          {callHref ? (
-            <a
-              href={callHref}
-              className={cn(buttonVariants({ variant: "default" }), "h-14 w-full gap-2 text-base")}
-            >
-              <Phone className="size-5" />
-              Call {phone}
-            </a>
+          {callHref && textHref ? (
+            <div className="grid grid-cols-2 gap-2">
+              <a
+                href={callHref}
+                className={cn(buttonVariants({ variant: "default" }), "h-14 gap-2 text-base")}
+              >
+                <Phone className="size-5" />
+                Call
+              </a>
+              <a
+                href={textHref}
+                className={cn(buttonVariants({ variant: "secondary" }), "h-14 gap-2 text-base")}
+              >
+                <MessageSquare className="size-5" />
+                Text
+              </a>
+            </div>
           ) : null}
 
           <section className="space-y-2">
