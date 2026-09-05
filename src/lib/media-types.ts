@@ -13,6 +13,8 @@ export const BLOB_STORE_PREFIX = "artcell";
 export const VIDEO_TOO_LARGE_HOST =
   "This video is over the Media upload limit (500 MB). Use a shorter clip.";
 
+export const STORAGE_NOT_CONNECTED = "Storage not connected";
+
 export const VIDEOS_GO_ON_MEDIA =
   "Videos go on the Media tab. Sponsor files are photos and PDFs only.";
 
@@ -29,7 +31,10 @@ export const PHOTO_PDF_MIME = new Set([
 
 export const VIDEO_MIME = new Set([
   "video/quicktime",
+  "video/x-quicktime",
+  "video/mov",
   "video/mp4",
+  "video/x-mp4",
   "video/x-m4v",
   "video/m4v",
   "video/webm",
@@ -74,7 +79,10 @@ export const MIME_EXT: Record<string, string> = {
   "image/heif": ".heif",
   "application/pdf": ".pdf",
   "video/quicktime": ".mov",
+  "video/x-quicktime": ".mov",
+  "video/mov": ".mov",
   "video/mp4": ".mp4",
+  "video/x-mp4": ".mp4",
   "video/x-m4v": ".m4v",
   "video/m4v": ".m4v",
   "video/webm": ".webm",
@@ -92,6 +100,7 @@ export const MEDIA_FILE_ACCEPT = [
   "image/*",
   "video/*",
   "video/quicktime",
+  "video/x-quicktime",
   "video/mp4",
   "video/x-m4v",
   "video/webm",
@@ -124,7 +133,10 @@ export const MEDIA_ALLOWED_CONTENT_TYPES = [
   "image/*",
   "application/pdf",
   "video/quicktime",
+  "video/x-quicktime",
+  "video/mov",
   "video/mp4",
+  "video/x-mp4",
   "video/x-m4v",
   "video/m4v",
   "video/webm",
@@ -142,11 +154,21 @@ export const MEDIA_ALLOWED_CONTENT_TYPES = [
 export const MEDIA_ID_RE = /^media-[a-z0-9]+-[a-f0-9]+$/;
 export const MEDIA_BLOB_PATH_RE = /^artcell\/media\/[A-Za-z0-9._-]+$/;
 
+export type BlobClientUploadMode = "token" | "presigned";
+
 export type MediaUploadConfig = {
   clientUpload: boolean;
   maxBytes: number;
   vercel: boolean;
+  mode?: BlobClientUploadMode | null;
 };
+
+export function isAllowedMediaBlobPath(pathname: string, id: string, expected: string): boolean {
+  if (pathname === expected) return true;
+  if (!MEDIA_BLOB_PATH_RE.test(pathname)) return false;
+  const safeId = sanitizeId(id);
+  return Boolean(safeId) && pathname.includes(safeId);
+}
 
 export function fileExt(fileName: string): string {
   const base = fileName.split(/[/\\]/).pop() || fileName;
