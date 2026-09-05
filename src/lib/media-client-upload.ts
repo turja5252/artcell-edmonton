@@ -1,54 +1,19 @@
 "use client";
 
-import { upload, uploadPresigned } from "@vercel/blob/client";
+import { put } from "@vercel/blob/client";
 
 import {
-  ensureMediaFileName,
+  CLIP_OVER_SERVER_UPLOAD,
   fallbackFileName,
   formatMaxMb,
   isUnknownFileSize,
   looksLikeVideo,
   MAX_MEDIA_BLOB_BYTES,
-  MAX_MEDIA_SERVER_BYTES,
   MAX_SERVERLESS_POST_BYTES,
-  mediaBlobPathname,
-  type BlobClientUploadMode,
-  type MediaUploadConfig,
-  newMediaId,
-  resolveMediaMime,
-  STORAGE_NOT_CONNECTED,
+  MEDIA_UPLOAD_FAILED,
   VIDEO_TOO_LARGE_HOST,
-  videoTooLargeForHost,
 } from "@/lib/media-types";
 import type { MediaItem } from "@/lib/types";
-
-export async function readMediaUploadConfig(): Promise<MediaUploadConfig> {
-  try {
-    const response = await fetch("/api/media/upload", { cache: "no-store" });
-    const data = (await response.json()) as Partial<MediaUploadConfig>;
-    if (!response.ok) throw new Error("config");
-    const clientUpload = Boolean(data.clientUpload);
-    const mode =
-      data.mode === "presigned" || data.mode === "token" ? data.mode : clientUpload ? "presigned" : null;
-    return {
-      clientUpload,
-      mode,
-      maxBytes:
-        Number(data.maxBytes) ||
-        (clientUpload ? MAX_MEDIA_BLOB_BYTES : MAX_MEDIA_SERVER_BYTES),
-      vercel: Boolean(data.vercel),
-    };
-  } catch {
-    // Prefer Blob. Falling back to POST on Vercel hits the ~4.5 MB body cap.
-    // Production uses OIDC, so default to the presigned client-upload path.
-    return {
-      clientUpload: true,
-      mode: "presigned",
-      maxBytes: MAX_MEDIA_BLOB_BYTES,
-      vercel: true,
-    };
-  }
-}
 
 export function readVideoDuration(file: File): Promise<number | null> {
   if (!looksLikeVideo(file.name, file.type)) return Promise.resolve(null);
@@ -70,141 +35,170 @@ export function readVideoDuration(file: File): Promise<number | null> {
   });
 }
 
-function videoMaxBytes(config: MediaUploadConfig): number {
-  return config.clientUpload
-    ? Math.max(config.maxBytes || 0, MAX_MEDIA_BLOB_BYTES)
-    : Math.max(config.maxBytes || 0, MAX_MEDIA_SERVER_BYTES);
-}
-
-function rejectIfTooLarge(file: File, config: MediaUploadConfig) {
+function rejectIfTooLarge(file: File) {
   if (isUnknownFileSize(file.size)) return;
-  const isVideo = looksLikeVideo(file.name, file.type);
-  if (isVideo) {
-    if (videoTooLargeForHost({ isVideo, size: file.size, ...config })) {
-      throw new Error(VIDEO_TOO_LARGE_HOST);
-    }
-    return;
-  }
-  if (file.size > config.maxBytes) {
+  if (file.size > MAX_MEDIA_BLOB_BYTES) {
     throw new Error(
-      `${file.name || "File"} is too large (max ${formatMaxMb(config.maxBytes)})`
+      looksLikeVideo(file.name, file.type)
+        ? VIDEO_TOO_LARGE_HOST
+        : `${file.name || "File"} is too large (max ${formatMaxMb(MAX_MEDIA_BLOB_BYTES)})`
     );
   }
 }
 
-function handleUploadUrl(): string {
-  if (typeof window === "undefined") return "/api/media/upload";
-  return `${window.location.origin}/api/media/upload`;
+function canAttemptServerPut(file: File): boolean {
+  return isUnknownFileSize(file.size) || file.size <= MAX_SERVERLESS_POST_BYTES;
 }
 
-function isTokenRequestError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return /Failed to retrieve the client token|Failed to retrieve the presigned|No read-write token|No blob credentials|Storage not connected|not available on this host/i.test(
-    message
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isPayloadTooLarge(error: unknown): boolean {
+  return /413|too large|payload|entity too large|over 4\.5MB/i.test(errorText(error));
+}
+
+function isMintFailure(error: unknown): boolean {
+  return (
+    errorText(error) === CLIP_OVER_SERVER_UPLOAD ||
+    /could not mint|canMint["']?\s*:\s*false|409/i.test(errorText(error))
   );
 }
 
-function friendlyMediaError(error: unknown, disconnected: boolean): Error {
-  const message = error instanceof Error ? error.message : "Upload failed";
+function friendlyMediaError(error: unknown): Error {
+  const message = errorText(error);
   if (
-    disconnected ||
-    /Storage not connected|not available on this host|No blob credentials|No read-write token/i.test(
-      message
-    )
+    message === CLIP_OVER_SERVER_UPLOAD ||
+    message === VIDEO_TOO_LARGE_HOST ||
+    message.includes("Only photos") ||
+    message.includes("too large") ||
+    message.includes("Empty")
   ) {
-    return new Error(STORAGE_NOT_CONNECTED);
+    return error instanceof Error ? error : new Error(message);
   }
-  if (/Failed to retrieve the client token|Failed to retrieve the presigned/i.test(message)) {
-    return new Error(STORAGE_NOT_CONNECTED);
-  }
+  if (!message || message === "Upload failed") return new Error(MEDIA_UPLOAD_FAILED);
   return error instanceof Error ? error : new Error(message);
 }
 
-function preferredModes(config: MediaUploadConfig, isVideo: boolean): BlobClientUploadMode[] {
-  const primary: BlobClientUploadMode = config.mode === "token" ? "token" : "presigned";
-  const secondary: BlobClientUploadMode = primary === "presigned" ? "token" : "presigned";
-  if (isVideo) return [primary, primary, secondary];
-  return [primary, secondary];
-}
+type FormUploadResult = { media?: MediaItem[]; item?: MediaItem; error?: string; ok: boolean };
 
-async function putViaClient(
-  mode: BlobClientUploadMode,
-  pathname: string,
-  file: File,
-  options: {
-    mimeType: string;
-    clientPayload: string;
-    multipart: boolean;
-    onProgress?: (percent: number) => void;
-  }
-) {
-  const common = {
-    access: "public" as const,
-    handleUploadUrl: handleUploadUrl(),
-    multipart: options.multipart,
-    contentType: options.mimeType || undefined,
-    clientPayload: options.clientPayload,
-    headers: { "cache-control": "no-store" },
-    onUploadProgress: ({ percentage }: { percentage: number }) => {
-      options.onProgress?.(Math.round(percentage));
-    },
+function readXhrPayload(xhr: XMLHttpRequest): FormUploadResult {
+  const payload = (xhr.response || {}) as { media?: MediaItem[]; item?: MediaItem; error?: string };
+  const raw = typeof xhr.response === "string" ? xhr.response : payload.error || "";
+  const tooLarge =
+    xhr.status === 413 || /too large|payload|entity too large|413/i.test(String(raw));
+  return {
+    ok: xhr.status >= 200 && xhr.status < 300,
+    media: payload.media,
+    item: payload.item,
+    error: tooLarge ? CLIP_OVER_SERVER_UPLOAD : payload.error,
   };
-  const send = mode === "presigned" ? uploadPresigned : upload;
-  await send(pathname, file, common);
 }
 
-export async function uploadMediaViaBlob(
+function postMediaForm(
+  form: FormData,
+  onProgress?: (percent: number) => void
+): Promise<FormUploadResult> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/media");
+    xhr.responseType = "json";
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        onProgress?.(Math.round((event.loaded / event.total) * 100));
+      }
+    };
+    xhr.onload = () => resolve(readXhrPayload(xhr));
+    xhr.onerror = () => reject(new Error("Upload failed"));
+    xhr.send(form);
+  });
+}
+
+async function uploadMediaViaServer(
   file: File,
   options: {
     actor: string | null;
     durationSeconds: number | null;
-    mode?: BlobClientUploadMode | null;
     onProgress?: (percent: number) => void;
   }
 ): Promise<MediaItem> {
-  const fileName = fallbackFileName(file);
-  const mimeType = resolveMediaMime(fileName, file.type) || file.type || "";
-  const storedName = ensureMediaFileName(fileName, mimeType);
-  const id = newMediaId();
-  const pathname = mediaBlobPathname(id, storedName, mimeType);
-  const unknownSize = isUnknownFileSize(file.size);
-  const clientPayload = JSON.stringify({
-    id,
-    fileName: storedName,
-    mimeType,
-    size: unknownSize ? 0 : file.size,
-    actor: options.actor,
-    durationSeconds: options.durationSeconds,
-  });
-  const isVideo = looksLikeVideo(fileName, mimeType);
-  const modes = preferredModes({ mode: options.mode, clientUpload: true, maxBytes: 0, vercel: true }, isVideo);
+  const form = new FormData();
+  if (options.actor) form.set("actor", options.actor);
+  if (options.durationSeconds) form.set("durationSeconds", String(options.durationSeconds));
+  form.append("files", file, fallbackFileName(file));
 
-  let lastError: unknown;
-  for (const mode of modes) {
-    try {
-      await putViaClient(mode, pathname, file, {
-        mimeType,
-        clientPayload,
-        multipart: unknownSize || file.size > MAX_SERVERLESS_POST_BYTES,
-        onProgress: options.onProgress,
-      });
-      lastError = undefined;
-      break;
-    } catch (error) {
-      lastError = error;
-      if (!isTokenRequestError(error)) throw error;
-    }
+  const result = await postMediaForm(form, options.onProgress);
+  const item = result.item || result.media?.[0];
+  if (result.ok && item) return item;
+  throw new Error(result.error || MEDIA_UPLOAD_FAILED);
+}
+
+type MintedToken = {
+  token: string;
+  id: string;
+  pathname: string;
+  fileName: string;
+  mimeType: string;
+};
+
+async function mintClientToken(file: File, idHint?: string): Promise<MintedToken | null> {
+  const response = await fetch("/api/media/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      id: idHint,
+      fileName: fallbackFileName(file),
+      mimeType: file.type || "",
+      size: isUnknownFileSize(file.size) ? 0 : file.size,
+    }),
+  });
+  const data = (await response.json()) as Partial<MintedToken> & {
+    error?: string;
+    canMint?: boolean;
+  };
+  if (!response.ok || !data.token || !data.pathname || !data.id) {
+    return null;
   }
-  if (lastError) throw lastError;
+  return {
+    token: data.token,
+    id: data.id,
+    pathname: data.pathname,
+    fileName: data.fileName || fallbackFileName(file),
+    mimeType: data.mimeType || file.type || "",
+  };
+}
+
+async function uploadMediaViaMintedToken(
+  file: File,
+  options: {
+    actor: string | null;
+    durationSeconds: number | null;
+    onProgress?: (percent: number) => void;
+  }
+): Promise<MediaItem> {
+  const minted = await mintClientToken(file);
+  if (!minted) {
+    throw new Error(CLIP_OVER_SERVER_UPLOAD);
+  }
+
+  await put(minted.pathname, file, {
+    access: "public",
+    token: minted.token,
+    contentType: minted.mimeType || undefined,
+    multipart: isUnknownFileSize(file.size) || file.size > MAX_SERVERLESS_POST_BYTES,
+    onUploadProgress: ({ percentage }) => {
+      options.onProgress?.(Math.round(percentage));
+    },
+  });
 
   const response = await fetch("/api/media", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      id,
-      fileName: storedName,
-      mimeType,
-      size: unknownSize ? 0 : file.size,
+      id: minted.id,
+      fileName: minted.fileName,
+      mimeType: minted.mimeType,
+      size: isUnknownFileSize(file.size) ? 0 : file.size,
       durationSeconds: options.durationSeconds,
       actor: options.actor,
     }),
@@ -216,60 +210,6 @@ export async function uploadMediaViaBlob(
   return item;
 }
 
-export function postMediaForm(
-  form: FormData,
-  onProgress?: (percent: number) => void
-): Promise<{ media?: MediaItem[]; error?: string; ok: boolean }> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", "/api/media");
-    xhr.responseType = "json";
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) {
-        onProgress?.(Math.round((event.loaded / event.total) * 100));
-      }
-    };
-    xhr.onload = () => {
-      const payload = (xhr.response || {}) as { media?: MediaItem[]; error?: string };
-      const raw =
-        typeof xhr.response === "string"
-          ? xhr.response
-          : payload.error || "";
-      const tooLarge =
-        xhr.status === 413 ||
-        /too large|payload|entity too large|413/i.test(String(raw));
-      resolve({
-        ok: xhr.status >= 200 && xhr.status < 300,
-        media: payload.media,
-        error: tooLarge
-          ? "Upload is too big for this path. Use the Media tab so the video goes to Blob."
-          : payload.error,
-      });
-    };
-    xhr.onerror = () => reject(new Error("Upload failed"));
-    xhr.send(form);
-  });
-}
-
-async function uploadMediaViaBlobWithRetry(
-  file: File,
-  options: {
-    actor: string | null;
-    durationSeconds: number | null;
-    mode?: BlobClientUploadMode | null;
-    onProgress?: (percent: number) => void;
-  }
-): Promise<MediaItem> {
-  try {
-    return await uploadMediaViaBlob(file, options);
-  } catch (error) {
-    if (!isTokenRequestError(error) && !looksLikeVideo(file.name, file.type)) {
-      throw error;
-    }
-    return await uploadMediaViaBlob(file, options);
-  }
-}
-
 export async function uploadMediaFiles(
   files: File[],
   options: {
@@ -277,61 +217,41 @@ export async function uploadMediaFiles(
     onProgress?: (percent: number) => void;
   }
 ): Promise<MediaItem[]> {
-  const config = await readMediaUploadConfig();
   const uploaded: MediaItem[] = [];
 
   for (let index = 0; index < files.length; index += 1) {
     const file = files[index];
-    rejectIfTooLarge(file, config);
+    rejectIfTooLarge(file);
     const durationSeconds = await readVideoDuration(file);
     const span = 100 / files.length;
     const base = index * span;
     const onProgress = (percent: number) => {
       options.onProgress?.(Math.round(base + (percent / 100) * span));
     };
-    const isVideo = looksLikeVideo(file.name, file.type);
-    const tryBlob = config.clientUpload || isVideo;
+    const shared = { actor: options.actor, durationSeconds, onProgress };
 
-    if (tryBlob) {
+    let serverError: unknown;
+    if (canAttemptServerPut(file)) {
       try {
-        uploaded.push(
-          await uploadMediaViaBlobWithRetry(file, {
-            actor: options.actor,
-            durationSeconds,
-            mode: config.mode,
-            onProgress,
-          })
-        );
+        uploaded.push(await uploadMediaViaServer(file, shared));
         continue;
       } catch (error) {
-        const known = !isUnknownFileSize(file.size);
-        if (known && file.size > videoMaxBytes(config)) {
-          throw new Error(
-            `${file.name || "File"} is too large (max ${formatMaxMb(videoMaxBytes(config))})`
-          );
-        }
-        const serverCap = config.vercel
-          ? MAX_SERVERLESS_POST_BYTES
-          : MAX_MEDIA_SERVER_BYTES;
-        const canServerPost = known && file.size <= serverCap;
-        if (!canServerPost) {
-          throw friendlyMediaError(error, !config.clientUpload);
+        serverError = error;
+        const knownSmall =
+          !isUnknownFileSize(file.size) && file.size <= MAX_SERVERLESS_POST_BYTES;
+        if (knownSmall && !isPayloadTooLarge(error)) {
+          throw friendlyMediaError(error);
         }
       }
     }
 
-    const form = new FormData();
-    if (options.actor) form.set("actor", options.actor);
-    if (durationSeconds) form.set("durationSeconds", String(durationSeconds));
-    form.append("files", file, fallbackFileName(file));
     try {
-      const result = await postMediaForm(form, onProgress);
-      if (!result.ok) {
-        throw friendlyMediaError(new Error(result.error || "Upload failed"), !config.clientUpload);
-      }
-      if (result.media?.length) uploaded.push(...result.media);
+      uploaded.push(await uploadMediaViaMintedToken(file, shared));
     } catch (error) {
-      throw friendlyMediaError(error, !config.clientUpload);
+      if (isMintFailure(error) || isPayloadTooLarge(serverError)) {
+        throw new Error(CLIP_OVER_SERVER_UPLOAD);
+      }
+      throw friendlyMediaError(error);
     }
   }
 

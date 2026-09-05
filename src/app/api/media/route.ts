@@ -1,15 +1,25 @@
-import { MAX_MEDIA_SERVER_BYTES } from "@/lib/attachments";
 import { jsonNoStore } from "@/lib/http";
-import { addMediaItem, listMedia, registerBlobMediaItem } from "@/lib/store";
+import { mediaPutErrorResponse, putMediaFromRequest } from "@/lib/media-server-put";
+import { MAX_SERVERLESS_POST_BYTES } from "@/lib/media-types";
+import { canMintBlobClientToken, useBlobStore } from "@/lib/persist";
+import { listMedia, registerBlobMediaItem } from "@/lib/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+/** Videos can take a while to buffer; Vercel still caps the body at ~4.5 MB on many accounts. */
 export const maxDuration = 60;
 
 export async function GET() {
   try {
     const media = await listMedia();
-    return jsonNoStore({ media });
+    return jsonNoStore({
+      media,
+      serverUpload: true,
+      serverMaxBytes: MAX_SERVERLESS_POST_BYTES,
+      canMintToken: canMintBlobClientToken(),
+      blob: useBlobStore(),
+      vercel: Boolean(process.env.VERCEL),
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load media";
     return jsonNoStore({ error: message }, { status: 500 });
@@ -38,61 +48,15 @@ async function registerFromJson(request: Request) {
   return jsonNoStore({ media: [item], item }, { status: 201 });
 }
 
-async function uploadFromForm(request: Request) {
-  const form = await request.formData();
-  const actor = String(form.get("actor") ?? "") || null;
-  const durationRaw = form.get("durationSeconds");
-  const durationSeconds =
-    durationRaw !== null && Number.isFinite(Number(durationRaw)) ? Number(durationRaw) : null;
-  const files = form
-    .getAll("files")
-    .concat(form.getAll("file"))
-    .filter((item): item is File => typeof File !== "undefined" && item instanceof File);
-
-  if (!files.length) {
-    return jsonNoStore({ error: "Choose a photo, video, or PDF to upload" }, { status: 400 });
-  }
-
-  const items = [];
-  for (const file of files) {
-    if (file.size > MAX_MEDIA_SERVER_BYTES) {
-      return jsonNoStore(
-        { error: `${file.name} is too large (max 80 MB)` },
-        { status: 400 }
-      );
-    }
-    const bytes = Buffer.from(await file.arrayBuffer());
-    items.push(
-      await addMediaItem({
-        fileName: file.name || "upload",
-        mimeType: file.type || "",
-        bytes,
-        actor,
-        durationSeconds,
-      })
-    );
-  }
-
-  return jsonNoStore({ media: items, item: items[items.length - 1] }, { status: 201 });
-}
-
 export async function POST(request: Request) {
   try {
     const contentType = request.headers.get("content-type") || "";
     if (contentType.includes("application/json")) {
       return await registerFromJson(request);
     }
-    return await uploadFromForm(request);
+    // Multipart / raw body: server-side Blob `put()` (same helper persist.ts uses).
+    return await putMediaFromRequest(request);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to upload";
-    const status =
-      message.includes("Only photos") ||
-      message.includes("too large") ||
-      message.includes("Empty") ||
-      message.includes("Invalid") ||
-      message.includes("not found")
-        ? 400
-        : 500;
-    return jsonNoStore({ error: message }, { status });
+    return mediaPutErrorResponse(error);
   }
 }

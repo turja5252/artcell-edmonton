@@ -1,12 +1,19 @@
 /** Shared media rules — safe for client and server. */
 
 export const MAX_ATTACHMENT_BYTES = 12 * 1024 * 1024;
-export const MAX_MEDIA_SERVER_BYTES = 80 * 1024 * 1024;
+export const MAX_MEDIA_SERVER_BYTES = 100 * 1024 * 1024;
 export const MAX_MEDIA_BLOB_BYTES = 500 * 1024 * 1024;
 /** Phone clips under this size are never “too large” on Blob. */
 export const SMALL_VIDEO_OK_BYTES = 100 * 1024 * 1024;
-/** Stay under Vercel Hobby / serverless request body (~4.5 MB). */
-export const MAX_SERVERLESS_POST_BYTES = 4 * 1024 * 1024;
+/**
+ * Vercel Hobby / many Pro accounts cap serverless request bodies at ~4.5 MB.
+ * Media POSTs the file to `/api/media` under this size; larger clips need a
+ * minted client token (`generateClientTokenFromReadWriteToken` + client `put`).
+ */
+export const MAX_SERVERLESS_POST_BYTES = Math.floor(4.5 * 1024 * 1024);
+
+export const CLIP_OVER_SERVER_UPLOAD =
+  "This clip is over 4.5MB for server upload";
 
 export const BLOB_STORE_PREFIX = "artcell";
 
@@ -14,6 +21,9 @@ export const VIDEO_TOO_LARGE_HOST =
   "This video is over the Media upload limit (500 MB). Use a shorter clip.";
 
 export const STORAGE_NOT_CONNECTED = "Storage not connected";
+
+export const MEDIA_UPLOAD_FAILED =
+  "Could not upload this file. Try again, or pick a shorter clip.";
 
 export const VIDEOS_GO_ON_MEDIA =
   "Videos go on the Media tab. Sponsor files are photos and PDFs only.";
@@ -161,6 +171,8 @@ export type MediaUploadConfig = {
   maxBytes: number;
   vercel: boolean;
   mode?: BlobClientUploadMode | null;
+  serverUpload?: boolean;
+  serverMaxBytes?: number;
 };
 
 export function isAllowedMediaBlobPath(pathname: string, id: string, expected: string): boolean {

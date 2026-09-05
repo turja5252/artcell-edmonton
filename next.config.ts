@@ -2,9 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   experimental: {
-    proxyClientMaxBodySize: "80mb",
+    proxyClientMaxBodySize: "100mb",
     serverActions: {
-      bodySizeLimit: "80mb",
+      bodySizeLimit: "100mb",
     },
   },
   allowedDevOrigins: [
