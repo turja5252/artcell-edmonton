@@ -226,7 +226,10 @@ export async function uploadMediaFiles(
             `${file.name || "File"} is too large (max ${formatMaxMb(videoMaxBytes(config))})`
           );
         }
-        const canServerPost = known && file.size <= MAX_SERVERLESS_POST_BYTES;
+        const serverCap = config.vercel
+          ? MAX_SERVERLESS_POST_BYTES
+          : MAX_MEDIA_SERVER_BYTES;
+        const canServerPost = known && file.size <= serverCap;
         if (!canServerPost) {
           throw error instanceof Error ? error : new Error("Upload failed");
         }
