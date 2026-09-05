@@ -1,5 +1,7 @@
 import { jsonNoStore } from "@/lib/http";
 import { mediaPutErrorResponse, putMediaFromRequest } from "@/lib/media-server-put";
+import { MAX_SERVERLESS_POST_BYTES } from "@/lib/media-types";
+import { blobClientUploadMode, canMintBlobClientToken, useBlobStore } from "@/lib/persist";
 import { listMedia, registerBlobMediaItem } from "@/lib/store";
 
 export const runtime = "nodejs";
@@ -9,7 +11,17 @@ export const maxDuration = 300;
 export async function GET() {
   try {
     const media = await listMedia();
-    return jsonNoStore({ media });
+    const mode = blobClientUploadMode();
+    return jsonNoStore({
+      media,
+      serverUpload: true,
+      clientUpload: Boolean(mode),
+      mode,
+      serverMaxBytes: MAX_SERVERLESS_POST_BYTES,
+      canMintToken: canMintBlobClientToken(),
+      blob: useBlobStore(),
+      vercel: Boolean(process.env.VERCEL),
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load media";
     return jsonNoStore({ error: message }, { status: 500 });

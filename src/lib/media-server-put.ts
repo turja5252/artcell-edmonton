@@ -1,7 +1,7 @@
 /**
  * Server-side Blob `put()` for Media. Same `@vercel/blob` `put` persist.ts uses
  * (OIDC or BLOB_READ_WRITE_TOKEN). Vercel request bodies are often capped at
- * ~4.5 MB — larger files must mint a client token instead of posting here.
+ * ~4.5 MB — larger files use an OIDC presigned PUT instead of posting here.
  */
 import { put } from "@vercel/blob";
 

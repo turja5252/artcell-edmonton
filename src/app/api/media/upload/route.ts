@@ -1,7 +1,6 @@
 import { issueSignedToken } from "@vercel/blob";
 import {
   generateClientTokenFromReadWriteToken,
-  handleUpload,
   handleUploadPresigned,
   type HandleUploadBody,
   type HandleUploadPresignedBody,
@@ -13,10 +12,10 @@ import {
   isAllowedMediaBlobPath,
   MAX_MEDIA_BLOB_BYTES,
   MAX_MEDIA_SERVER_BYTES,
+  MAX_SERVERLESS_POST_BYTES,
   MEDIA_ALLOWED_CONTENT_TYPES,
   MEDIA_ID_RE,
   mediaBlobPathname,
-  SMALL_VIDEO_OK_BYTES,
 } from "@/lib/media-types";
 import { jsonNoStore } from "@/lib/http";
 import { mediaPutErrorResponse, putMediaFromRequest } from "@/lib/media-server-put";
@@ -48,7 +47,7 @@ export async function GET() {
     serverUpload: true,
     canMintToken: canMintBlobClientToken(),
     maxBytes: mode ? MAX_MEDIA_BLOB_BYTES : MAX_MEDIA_SERVER_BYTES,
-    serverMaxBytes: SMALL_VIDEO_OK_BYTES,
+    serverMaxBytes: MAX_SERVERLESS_POST_BYTES,
     blob: useBlobStore(),
     vercel: Boolean(process.env.VERCEL),
   });
@@ -121,50 +120,10 @@ function uploadErrorResponse(error: unknown) {
     message.includes("Invalid")
       ? 400
       : 409;
-  return jsonNoStore({ error: message, fallback: "server", mode: blobClientUploadMode() }, { status });
-}
-
-async function handleClassicClientToken(request: Request, body: HandleUploadBody) {
-  const rwToken = blobReadWriteToken();
-  if (!rwToken) {
-    return jsonNoStore(
-      { error: "Client token unavailable", fallback: "presigned", mode: "presigned" },
-      { status: 409 }
-    );
-  }
-
-  if (body.type === "blob.generate-client-token") {
-    const { pathname, clientPayload } = body.payload;
-    const authorized = authorizeClientUpload(pathname, clientPayload);
-    const clientToken = await generateClientTokenFromReadWriteToken({
-      token: rwToken,
-      pathname,
-      ...TOKEN_CONSTRAINTS,
-      validUntil: Date.now() + 60 * 60 * 1000,
-    });
-    void authorized;
-    return jsonNoStore({
-      type: "blob.generate-client-token",
-      clientToken,
-    });
-  }
-
-  const jsonResponse = await handleUpload({
-    token: rwToken,
-    body,
-    request,
-    onBeforeGenerateToken: async (pathname, clientPayload) => {
-      const authorized = authorizeClientUpload(pathname, clientPayload);
-      return {
-        ...TOKEN_CONSTRAINTS,
-        tokenPayload: JSON.stringify(authorized),
-      };
-    },
-    onUploadCompleted: async ({ tokenPayload }) => {
-      await registerCompleted(tokenPayload);
-    },
-  });
-  return jsonNoStore(jsonResponse);
+  return jsonNoStore(
+    { error: message, fallback: "presigned", mode: blobClientUploadMode() },
+    { status }
+  );
 }
 
 export async function POST(request: Request) {
@@ -178,7 +137,7 @@ export async function POST(request: Request) {
   }
 
   if (!useBlobStore()) {
-    return jsonNoStore({ error: "Client token unavailable", fallback: "server" }, { status: 503 });
+    return jsonNoStore({ error: "Storage not connected", fallback: "server" }, { status: 503 });
   }
 
   let body: { type?: string };
@@ -215,8 +174,33 @@ export async function POST(request: Request) {
       return jsonNoStore(jsonResponse);
     }
 
-    if (body.type === "blob.generate-client-token" || body.type === "blob.upload-completed") {
-      return await handleClassicClientToken(request, body as HandleUploadBody);
+    if (body.type === "blob.generate-client-token") {
+      const rwToken = blobReadWriteToken();
+      if (!rwToken) {
+        return jsonNoStore(
+          { error: "Presigned upload required", fallback: "presigned", mode: "presigned" },
+          { status: 409 }
+        );
+      }
+      const event = body as Extract<HandleUploadBody, { type: "blob.generate-client-token" }>;
+      const pathname = event.payload.pathname;
+      authorizeClientUpload(pathname, event.payload.clientPayload);
+      const clientToken = await generateClientTokenFromReadWriteToken({
+        token: rwToken,
+        pathname,
+        ...TOKEN_CONSTRAINTS,
+        validUntil: Date.now() + 60 * 60 * 1000,
+      });
+      return jsonNoStore({
+        type: "blob.generate-client-token",
+        clientToken,
+      });
+    }
+
+    if (body.type === "blob.upload-completed") {
+      const completed = body as { payload?: { tokenPayload?: string } };
+      await registerCompleted(completed.payload?.tokenPayload);
+      return jsonNoStore({ type: "blob.upload-completed", response: "ok" });
     }
 
     return jsonNoStore({ error: "Invalid upload request", fallback: "server" }, { status: 400 });

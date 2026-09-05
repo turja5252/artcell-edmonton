@@ -7,8 +7,9 @@ export const MAX_MEDIA_BLOB_BYTES = 500 * 1024 * 1024;
 export const SMALL_VIDEO_OK_BYTES = 100 * 1024 * 1024;
 /**
  * Vercel Hobby / many Pro accounts cap serverless request bodies at ~4.5 MB.
- * Media POSTs the file to `/api/media` under this size; larger clips need a
- * minted client token (`generateClientTokenFromReadWriteToken` + client `put`).
+ * Files that fit POST to `/api/media` (server `put()`). Larger clips use an
+ * OIDC presigned PUT. HMAC client tokens are only minted when
+ * `BLOB_READ_WRITE_TOKEN` exists.
  */
 export const MAX_SERVERLESS_POST_BYTES = Math.floor(4.5 * 1024 * 1024);
 
@@ -173,6 +174,7 @@ export type MediaUploadConfig = {
   mode?: BlobClientUploadMode | null;
   serverUpload?: boolean;
   serverMaxBytes?: number;
+  canMintToken?: boolean;
 };
 
 export function isAllowedMediaBlobPath(pathname: string, id: string, expected: string): boolean {
@@ -375,11 +377,13 @@ export function videoTooLargeForHost(input: {
   clientUpload: boolean;
   vercel: boolean;
   maxBytes: number;
+  mode?: BlobClientUploadMode | null;
 }): boolean {
   if (!input.isVideo) return false;
   if (isUnknownFileSize(input.size)) return false;
   if (input.size <= SMALL_VIDEO_OK_BYTES) return false;
-  const cap = input.clientUpload
+  const client = input.clientUpload || Boolean(input.mode);
+  const cap = client
     ? Math.max(input.maxBytes || 0, MAX_MEDIA_BLOB_BYTES)
     : Math.max(input.maxBytes || 0, MAX_MEDIA_SERVER_BYTES);
   return input.size > cap;

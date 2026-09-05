@@ -3,7 +3,6 @@ import { generateClientTokenFromReadWriteToken } from "@vercel/blob/client";
 import { jsonNoStore } from "@/lib/http";
 import {
   assertAllowedMedia,
-  CLIP_OVER_SERVER_UPLOAD,
   ensureMediaFileName,
   isAllowedMediaBlobPath,
   MAX_MEDIA_BLOB_BYTES,
@@ -26,6 +25,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   return jsonNoStore({
     canMint: canMintBlobClientToken(),
+    mode: canMintBlobClientToken() ? "token" : "presigned",
     blob: useBlobStore(),
     serverMaxBytes: MAX_SERVERLESS_POST_BYTES,
     vercel: Boolean(process.env.VERCEL),
@@ -43,7 +43,12 @@ export async function POST(request: Request) {
   const rwToken = blobReadWriteToken();
   if (!rwToken) {
     return jsonNoStore(
-      { error: CLIP_OVER_SERVER_UPLOAD, canMint: false },
+      {
+        error: "Presigned upload required",
+        canMint: false,
+        mode: "presigned",
+        fallback: "presigned",
+      },
       { status: 409 }
     );
   }
@@ -94,6 +99,15 @@ export async function POST(request: Request) {
       message.includes("Invalid")
         ? 400
         : 409;
-    return jsonNoStore({ error: CLIP_OVER_SERVER_UPLOAD, detail: message, canMint: false }, { status });
+    return jsonNoStore(
+      {
+        error: "Presigned upload required",
+        detail: message,
+        canMint: false,
+        mode: "presigned",
+        fallback: "presigned",
+      },
+      { status }
+    );
   }
 }
