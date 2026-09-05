@@ -1,4 +1,5 @@
 import { uniqueId } from "@/lib/ids";
+import { DEFAULT_CONCERT_DATE, normalizeConcertDate } from "@/lib/concert-date";
 import { parseIsoDate } from "@/lib/deliverables";
 import { parseCount, parseMoney } from "@/lib/money";
 import type {
@@ -49,6 +50,7 @@ const DEFAULT_SETTINGS: Settings = {
   ticketsSold: 0,
   ticketsSoldUpdatedAt: null,
   ticketsSoldUpdatedBy: null,
+  concertDate: DEFAULT_CONCERT_DATE,
 };
 
 let queue: Promise<unknown> = Promise.resolve();
@@ -198,6 +200,7 @@ async function readSettingsFile(): Promise<Settings> {
     ticketsSold: parseCount(parsed.ticketsSold),
     ticketsSoldUpdatedAt: parsed.ticketsSoldUpdatedAt ?? null,
     ticketsSoldUpdatedBy: parsed.ticketsSoldUpdatedBy?.trim() || null,
+    concertDate: normalizeConcertDate(parsed.concertDate),
   };
 }
 
@@ -868,6 +871,10 @@ export function updateSettings(patch: Partial<Settings>): Promise<Settings> {
         : patch.ticketsSoldUpdatedBy === undefined
           ? current.ticketsSoldUpdatedBy
           : patch.ticketsSoldUpdatedBy?.trim() || null,
+      concertDate:
+        patch.concertDate === undefined
+          ? current.concertDate
+          : normalizeConcertDate(patch.concertDate),
     };
     await writeSettingsFile(next);
     return next;

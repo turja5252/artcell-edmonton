@@ -102,6 +102,8 @@ export type Settings = {
   ticketsSold: number;
   ticketsSoldUpdatedAt: string | null;
   ticketsSoldUpdatedBy: string | null;
+  /** ISO calendar day of the show, e.g. 2026-09-20. */
+  concertDate: string;
 };
 
 export type Deliverable = {

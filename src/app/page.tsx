@@ -1,4 +1,5 @@
 import { ConcertApp } from "@/components/concert-app";
+import { DEFAULT_CONCERT_DATE } from "@/lib/concert-date";
 import { getBoard } from "@/lib/store";
 import type { Deliverable, Guest, Lead, Member, Settings } from "@/lib/types";
 
@@ -15,6 +16,7 @@ export default async function Home() {
     ticketsSold: 0,
     ticketsSoldUpdatedAt: null,
     ticketsSoldUpdatedBy: null,
+    concertDate: DEFAULT_CONCERT_DATE,
   };
   let loadError = "";
   try {
