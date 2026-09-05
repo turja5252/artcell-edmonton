@@ -65,19 +65,15 @@ export function useBlobStore(): boolean {
   );
 }
 
-/** Classic client tokens (`handleUpload`) need this. Server `put`/`list` can use OIDC instead. */
+/** HMAC client tokens need this. Server `put`/`list` can use OIDC instead. */
 export function blobReadWriteToken(): string | undefined {
   const token = process.env.BLOB_READ_WRITE_TOKEN?.trim();
   return token || undefined;
 }
 
-/**
- * How the browser should talk to `/api/media/upload`.
- * OIDC + `BLOB_STORE_ID` is enough for server writes, but not for HMAC client tokens.
- */
-export function blobClientUploadMode(): "token" | "presigned" | null {
-  if (!useBlobStore()) return null;
-  return blobReadWriteToken() ? "token" : "presigned";
+/** True when `/api/media/token` can mint a client token (RW token present). */
+export function canMintBlobClientToken(): boolean {
+  return Boolean(blobReadWriteToken());
 }
 
 function assertWritableStore(action: string) {
