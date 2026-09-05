@@ -137,3 +137,10 @@
     0 0 48px 12px rgba(5, 150, 105, 0.45) !important;
   background-color: color-mix(in oklab, var(--card) 78%, #064e3b);
 }
+
+/* Overdue tasks: amber rail + wash. Not the red declined-sponsor glow. */
+.task-overdue {
+  border-left-width: 4px;
+  border-left-color: #f59e0b;
+  background-color: color-mix(in oklab, var(--card) 86%, #78350f);
+}

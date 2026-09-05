@@ -104,11 +104,30 @@ export type Settings = {
   ticketsSoldUpdatedBy: string | null;
 };
 
+export type Deliverable = {
+  id: string;
+  title: string;
+  assignedTo: string;
+  dueDate: string;
+  startDate: string | null;
+  done: boolean;
+  notes: string;
+  updatedAt: string | null;
+  updatedBy: string | null;
+};
+
+export type DeliverablePatch = Partial<
+  Pick<Deliverable, "title" | "assignedTo" | "dueDate" | "startDate" | "done" | "notes">
+> & {
+  actor?: string | null;
+};
+
 export type BoardSnapshot = {
   leads: Lead[];
   guests: Guest[];
   members: Member[];
   settings: Settings;
+  deliverables: Deliverable[];
   writtenAt: string | null;
 };
 

@@ -12,6 +12,7 @@ import {
 } from "react";
 import {
   Check,
+  ClipboardList,
   FileSpreadsheet,
   Handshake,
   ListMusic,
@@ -36,10 +37,12 @@ import { SetlistBoard } from "@/components/setlist-board";
 import { TargetEditor } from "@/components/target-editor";
 import { TicketsEditor } from "@/components/tickets-editor";
 import { TeamBoard } from "@/components/team-board";
+import { DeliverablesBoard } from "@/components/deliverables-board";
 import { WhoAmI } from "@/components/who-am-i";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  mergeDeliverables,
   mergeGuests,
   mergeLeads,
   mergeMembers,
@@ -49,7 +52,7 @@ import {
 } from "@/lib/board-sync";
 import { formatMoney } from "@/lib/money";
 import { formatTime } from "@/lib/people";
-import type { Guest, GuestStatus, Lead, Member, Settings } from "@/lib/types";
+import type { Deliverable, Guest, GuestStatus, Lead, Member, Settings } from "@/lib/types";
 import {
   displayGuestName,
   DECLINED_PILL_CLASS,
@@ -91,7 +94,7 @@ function writeMe(name: string) {
   window.dispatchEvent(new Event(ME_EVENT));
 }
 
-type Tab = "outreach" | "money" | "seats" | "team" | "setlist";
+type Tab = "outreach" | "money" | "seats" | "team" | "setlist" | "deliverables";
 type Filter = "mine" | "open" | "unassigned" | "done" | "all";
 
 function matches(lead: Lead, query: string, filter: Filter, me: string) {
@@ -111,12 +114,14 @@ export function ConcertApp({
   initialGuests,
   initialMembers,
   initialSettings,
+  initialDeliverables,
   initialError = "",
 }: {
   initialLeads: Lead[];
   initialGuests: Guest[];
   initialMembers: Member[];
   initialSettings: Settings;
+  initialDeliverables: Deliverable[];
   initialError?: string;
 }) {
   const me = useSyncExternalStore(subscribeMe, readMe, () => "");
@@ -134,6 +139,7 @@ export function ConcertApp({
   const [guests, setGuests] = useState<Guest[]>(initialGuests);
   const [members, setMembers] = useState<Member[]>(initialMembers);
   const [settings, setSettings] = useState<Settings>(initialSettings);
+  const [deliverables, setDeliverables] = useState<Deliverable[]>(initialDeliverables);
   const [tab, setTab] = useState<Tab>("outreach");
   const [filter, setFilter] = useState<Filter>("open");
   const [seatFilter, setSeatFilter] = useState<SeatFilter>("not_called");
@@ -165,6 +171,7 @@ export function ConcertApp({
     leads: new Set<string>(),
     guests: new Set<string>(),
     members: new Set<string>(),
+    deliverables: new Set<string>(),
   });
 
   const people = useMemo(
@@ -210,6 +217,7 @@ export function ConcertApp({
       guests?: Guest[];
       members?: Member[];
       settings?: Settings;
+      deliverables?: Deliverable[];
     },
     mode: "poll" | "replace"
   ) {
@@ -218,6 +226,7 @@ export function ConcertApp({
       if (data.guests) setGuests(data.guests);
       if (data.members) setMembers(data.members);
       if (data.settings) setSettings(data.settings);
+      if (data.deliverables) setDeliverables(data.deliverables);
       return;
     }
     if (data.leads) {
@@ -248,6 +257,17 @@ export function ConcertApp({
     if (data.settings) {
       setSettings((current) => mergeSettings(current, data.settings!));
     }
+    if (data.deliverables) {
+      setDeliverables((current) =>
+        mergeDeliverables(
+          current,
+          data.deliverables!,
+          deletedIds.current.deliverables,
+          busyIdRef.current,
+          lastWriteById.current
+        )
+      );
+    }
   }
 
   function saveInFlight() {
@@ -269,6 +289,7 @@ export function ConcertApp({
       guests?: Guest[];
       members?: Member[];
       settings?: Settings;
+      deliverables?: Deliverable[];
       writtenAt?: string | null;
       error?: string;
     };
@@ -396,6 +417,7 @@ export function ConcertApp({
         members?: Member[];
         leads?: Lead[];
         guests?: Guest[];
+        deliverables?: Deliverable[];
         error?: string;
       };
       if (!response.ok) {
@@ -407,6 +429,7 @@ export function ConcertApp({
       else setMembers((current) => current.filter((member) => member.id !== id));
       if (data.leads) setLeads(data.leads);
       if (data.guests) setGuests(data.guests);
+      if (data.deliverables) setDeliverables(data.deliverables);
       if (removed && me === removed.name) writeMe("");
       setToast("Removed from the team");
     } catch (error) {
@@ -464,6 +487,15 @@ export function ConcertApp({
                   : guest.assignedTo,
               updatedBy:
                 guest.updatedBy === previous.name ? data.member!.name : guest.updatedBy,
+            }))
+          );
+          setDeliverables((current) =>
+            current.map((item) => ({
+              ...item,
+              assignedTo:
+                item.assignedTo === previous.name ? data.member!.name : item.assignedTo,
+              updatedBy:
+                item.updatedBy === previous.name ? data.member!.name : item.updatedBy,
             }))
           );
           if (me === previous.name) writeMe(data.member.name);
@@ -686,6 +718,106 @@ export function ConcertApp({
         setToast("Those contacts are already on the list");
       }
       return { added, skipped };
+    } finally {
+      markSaveEnd();
+    }
+  }
+
+  async function saveDeliverable(
+    id: string,
+    patch: Partial<Deliverable> & { actor?: string }
+  ) {
+    setBusyId(id);
+    busyIdRef.current = id;
+    markSaveStart();
+    setDeliverables((current) =>
+      current.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              ...patch,
+              assignedTo:
+                patch.assignedTo === undefined ? item.assignedTo : patch.assignedTo,
+              startDate:
+                patch.startDate === undefined ? item.startDate : patch.startDate,
+              updatedAt: new Date().toISOString(),
+              updatedBy: patch.actor ?? me ?? item.updatedBy,
+            }
+          : item
+      )
+    );
+    try {
+      const response = await fetch(`/api/deliverables/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...patch, actor: patch.actor ?? me }),
+      });
+      const data = (await response.json()) as { deliverable?: Deliverable; error?: string };
+      if (!response.ok) throw new Error(data.error || "Update failed");
+      if (data.deliverable) {
+        noteSuccessfulWrite(id, data.deliverable.updatedAt);
+        setDeliverables((current) =>
+          current.map((item) => (item.id === id ? data.deliverable! : item))
+        );
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Update failed");
+      await load("replace");
+    } finally {
+      setBusyId(null);
+      busyIdRef.current = null;
+      markSaveEnd();
+    }
+  }
+
+  async function addDeliverable(input: {
+    title: string;
+    assignedTo: string;
+    dueDate: string;
+    startDate: string;
+    notes: string;
+  }) {
+    markSaveStart();
+    try {
+      const response = await fetch("/api/deliverables", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: input.title,
+          assignedTo: input.assignedTo,
+          dueDate: input.dueDate,
+          startDate: input.startDate || null,
+          notes: input.notes,
+          actor: me,
+        }),
+      });
+      const data = (await response.json()) as { deliverable?: Deliverable; error?: string };
+      if (!response.ok) throw new Error(data.error || "Could not add");
+      if (data.deliverable) {
+        noteSuccessfulWrite(data.deliverable.id, data.deliverable.updatedAt);
+        setDeliverables((current) => [...current, data.deliverable!]);
+      }
+      setToast(`${input.title} is on the list`);
+    } finally {
+      markSaveEnd();
+    }
+  }
+
+  async function deleteDeliverable(id: string) {
+    const removed = deliverables.find((item) => item.id === id);
+    deletedIds.current.deliverables.add(id);
+    markSaveStart();
+    setDeliverables((current) => current.filter((item) => item.id !== id));
+    try {
+      const response = await fetch(`/api/deliverables/${id}`, { method: "DELETE" });
+      const data = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(data.error || "Could not delete");
+      noteSuccessfulWrite(id);
+      setToast(removed ? `Removed ${removed.title}` : "Task deleted");
+    } catch (err) {
+      deletedIds.current.deliverables.delete(id);
+      setError(err instanceof Error ? err.message : "Could not delete");
+      await load("replace");
     } finally {
       markSaveEnd();
     }
@@ -1034,6 +1166,21 @@ export function ConcertApp({
         </section>
       )}
 
+      {tab === "deliverables" && (
+        <section className="mt-5 flex-1">
+          <DeliverablesBoard
+            items={deliverables}
+            people={people}
+            me={me}
+            busyId={busyId}
+            onPickMe={() => setWhoOpen(true)}
+            onAdd={addDeliverable}
+            onSave={saveDeliverable}
+            onDelete={deleteDeliverable}
+          />
+        </section>
+      )}
+
       {tab === "outreach" || tab === "seats" ? (
         <Button
           type="button"
@@ -1045,37 +1192,43 @@ export function ConcertApp({
         </Button>
       ) : null}
 
-      <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-border/80 bg-background/95 px-2 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md">
-        <div className="mx-auto grid max-w-3xl grid-cols-5 gap-0.5">
+      <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-border/80 bg-background/95 px-1 pt-1.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md">
+        <div className="mx-auto grid max-w-3xl grid-cols-6 gap-0">
           <NavButton
             active={tab === "outreach"}
-            icon={<Handshake className="size-5" />}
+            icon={<Handshake className="size-4" />}
             label="Calls"
             onClick={() => setTab("outreach")}
           />
           <NavButton
             active={tab === "money"}
-            icon={<Wallet className="size-5" />}
+            icon={<Wallet className="size-4" />}
             label="Money"
             onClick={() => setTab("money")}
           />
           <NavButton
             active={tab === "seats"}
-            icon={<Ticket className="size-5" />}
+            icon={<Ticket className="size-4" />}
             label="Seats"
             onClick={() => setTab("seats")}
           />
           <NavButton
             active={tab === "team"}
-            icon={<Users className="size-5" />}
+            icon={<Users className="size-4" />}
             label="Team"
             onClick={() => setTab("team")}
           />
           <NavButton
             active={tab === "setlist"}
-            icon={<ListMusic className="size-5" />}
+            icon={<ListMusic className="size-4" />}
             label="Songs"
             onClick={() => setTab("setlist")}
+          />
+          <NavButton
+            active={tab === "deliverables"}
+            icon={<ClipboardList className="size-4" />}
+            label="List"
+            onClick={() => setTab("deliverables")}
           />
         </div>
       </nav>
@@ -1198,7 +1351,7 @@ function NavButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "relative z-50 flex h-14 flex-col items-center justify-center gap-0.5 rounded-xl text-xs font-medium touch-manipulation",
+        "relative z-50 flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-0.5 text-[10px] font-medium touch-manipulation sm:h-14 sm:text-xs",
         active ? "bg-primary/15 text-primary" : "text-muted-foreground"
       )}
     >

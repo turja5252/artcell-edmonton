@@ -1,4 +1,4 @@
-import type { Guest, Lead, Member, Settings } from "@/lib/types";
+import type { Deliverable, Guest, Lead, Member, Settings } from "@/lib/types";
 
 export function parseUpdatedAt(value: string | null | undefined): number {
   if (!value) return 0;
@@ -38,6 +38,7 @@ export function snapshotStamp(input: {
   writtenAt?: string | null;
   leads?: Array<{ updatedAt?: string | null }>;
   guests?: Array<{ updatedAt?: string | null }>;
+  deliverables?: Array<{ updatedAt?: string | null }>;
   settings?: { ticketsSoldUpdatedAt?: string | null } | null;
 }): number {
   const meta = parseUpdatedAt(input.writtenAt);
@@ -45,6 +46,7 @@ export function snapshotStamp(input: {
   return Math.max(
     maxUpdatedAt(input.leads ?? []),
     maxUpdatedAt(input.guests ?? []),
+    maxUpdatedAt(input.deliverables ?? []),
     parseUpdatedAt(input.settings?.ticketsSoldUpdatedAt)
   );
 }
@@ -116,6 +118,16 @@ export function mergeGuests(
   pendingId?: string | null,
   lastWriteById?: Map<string, number>
 ): Guest[] {
+  return mergeByUpdatedAt(local, remote, deletedIds, pendingId, lastWriteById);
+}
+
+export function mergeDeliverables(
+  local: Deliverable[],
+  remote: Deliverable[],
+  deletedIds: Set<string>,
+  pendingId?: string | null,
+  lastWriteById?: Map<string, number>
+): Deliverable[] {
   return mergeByUpdatedAt(local, remote, deletedIds, pendingId, lastWriteById);
 }
 

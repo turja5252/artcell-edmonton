@@ -6,7 +6,13 @@ import { del, get, head, list, put } from "@vercel/blob";
 const PREFIX = "artcell";
 
 /** Live board files. After first seed, never rewrite these from git `data/*.json`. */
-const LIVE_JSON = new Set(["leads.json", "guests.json", "members.json", "settings.json"]);
+const LIVE_JSON = new Set([
+  "leads.json",
+  "guests.json",
+  "members.json",
+  "settings.json",
+  "deliverables.json",
+]);
 
 type CacheEntry = {
   value: unknown;

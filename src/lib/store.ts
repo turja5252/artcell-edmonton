@@ -1,6 +1,9 @@
 import { uniqueId } from "@/lib/ids";
+import { parseIsoDate } from "@/lib/deliverables";
 import { parseCount, parseMoney } from "@/lib/money";
 import type {
+  Deliverable,
+  DeliverablePatch,
   Guest,
   GuestPatch,
   Lead,
@@ -25,6 +28,7 @@ import {
   assertTeamAdminActor,
   canonicalizeMembers,
   isKhaledAlias,
+  isTeamAdmin,
   KHALED_CANONICAL,
   resolveActorName,
   resolveAssignee,
@@ -37,6 +41,7 @@ const LEADS_FILE = "leads.json";
 const GUESTS_FILE = "guests.json";
 const MEMBERS_FILE = "members.json";
 const SETTINGS_FILE = "settings.json";
+const DELIVERABLES_FILE = "deliverables.json";
 
 const DEFAULT_SETTINGS: Settings = {
   moneyTarget: 0,
@@ -200,6 +205,82 @@ async function writeSettingsFile(settings: Settings) {
   await writeJsonFile(SETTINGS_FILE, settings);
 }
 
+function requireDueDate(value: string | null | undefined): string {
+  const due = parseIsoDate(value);
+  if (!due) throw new Error("Set a due date");
+  return due;
+}
+
+function optionalStartDate(value: string | null | undefined): string | null {
+  if (value == null || String(value).trim() === "") return null;
+  const start = parseIsoDate(value);
+  if (!start) throw new Error("Start date is not a real day");
+  return start;
+}
+
+function requireRosterAssignee(
+  value: string | null | undefined,
+  allowedNames: string[]
+): string {
+  const raw = (value ?? "").trim();
+  if (!raw) throw new Error("Pick who owns this from the team");
+  if (isTeamAdmin(raw)) {
+    throw new Error("Admin cannot own a task — pick a teammate");
+  }
+  const assigned = resolveAssignee(raw, allowedNames);
+  if (!assigned) throw new Error("Pick who owns this from the team");
+  return assigned;
+}
+
+function normalizeDeliverable(
+  item: Partial<Deliverable> & { id: string; title: string; assignedTo: string; dueDate: string }
+): Deliverable {
+  const startDate = optionalStartDate(item.startDate);
+  const dueDate = requireDueDate(item.dueDate);
+  if (startDate && startDate > dueDate) {
+    throw new Error("Start date has to be on or before the due date");
+  }
+  return {
+    id: item.id,
+    title: item.title.trim(),
+    assignedTo: rewriteStoredPersonName(item.assignedTo) || item.assignedTo.trim(),
+    dueDate,
+    startDate,
+    done: Boolean(item.done),
+    notes: item.notes ?? "",
+    updatedAt: item.updatedAt ?? null,
+    updatedBy: rewriteStoredPersonName(item.updatedBy) ?? item.updatedBy ?? null,
+  };
+}
+
+function readDeliverableRow(item: Partial<Deliverable> & { id: string }): Deliverable | null {
+  const title = item.title?.trim() || "";
+  const assignedTo = item.assignedTo?.trim() || "";
+  const dueDate = parseIsoDate(item.dueDate);
+  if (!title || !assignedTo || !dueDate) return null;
+  try {
+    return normalizeDeliverable({
+      ...item,
+      title,
+      assignedTo,
+      dueDate,
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function readDeliverablesFile(): Promise<Deliverable[]> {
+  const parsed = await readJsonFile<Deliverable[]>(DELIVERABLES_FILE, []);
+  return parsed
+    .map((item) => readDeliverableRow(item))
+    .filter((item): item is Deliverable => Boolean(item));
+}
+
+async function writeDeliverablesFile(items: Deliverable[]) {
+  await writeJsonFile(DELIVERABLES_FILE, items);
+}
+
 export function listLeads(): Promise<Lead[]> {
   return enqueue(readLeadsFile);
 }
@@ -216,6 +297,10 @@ export function getSettings(): Promise<Settings> {
   return enqueue(readSettingsFile);
 }
 
+export function listDeliverables(): Promise<Deliverable[]> {
+  return enqueue(readDeliverablesFile);
+}
+
 export function getBoard(): Promise<BoardSnapshot> {
   return enqueue(async () => {
     const membersRaw = await readJsonFile<Member[]>(MEMBERS_FILE, []);
@@ -223,6 +308,7 @@ export function getBoard(): Promise<BoardSnapshot> {
     const members = canonicalizeMembers(membersNormalized);
     const leadsOriginal = await readLeadsFile();
     const guestsOriginal = await readGuestsFile();
+    const deliverablesOriginal = await readDeliverablesFile();
     const settings = await readSettingsFile();
     const meta = await readBoardWriteMeta();
 
@@ -245,10 +331,19 @@ export function getBoard(): Promise<BoardSnapshot> {
             assignedTo: canonicalizeStoredAssignee(guest.assignedTo, allowedNames),
             updatedBy: resolveActorName(guest.updatedBy, allowedNames) ?? guest.updatedBy,
           }));
+    const deliverables =
+      members.length === 0
+        ? deliverablesOriginal
+        : deliverablesOriginal.map((item) => ({
+            ...item,
+            assignedTo:
+              canonicalizeStoredAssignee(item.assignedTo, allowedNames) ?? item.assignedTo,
+            updatedBy: resolveActorName(item.updatedBy, allowedNames) ?? item.updatedBy,
+          }));
 
     // Read-only: never persist folds or assignee rewrites from GET / SSR.
     // A stale blob read + write was overwriting newer PATCH results.
-    const computed = snapshotStamp({ leads, guests, settings });
+    const computed = snapshotStamp({ leads, guests, deliverables, settings });
     const metaStamp = meta?.writtenAt ?? null;
     const metaAt = metaStamp ? Date.parse(metaStamp) : 0;
     const writtenAt =
@@ -258,7 +353,7 @@ export function getBoard(): Promise<BoardSnapshot> {
           ? new Date(computed).toISOString()
           : metaStamp;
 
-    return { leads, guests, members, settings, writtenAt };
+    return { leads, guests, members, settings, deliverables, writtenAt };
   });
 }
 
@@ -666,6 +761,86 @@ export function patchGuest(id: string, patch: GuestPatch): Promise<Guest> {
   });
 }
 
+export function createDeliverable(input: {
+  title: string;
+  assignedTo: string;
+  dueDate: string;
+  startDate?: string | null;
+  notes?: string;
+  actor?: string | null;
+}): Promise<Deliverable> {
+  return enqueue(async () => {
+    const title = input.title.trim();
+    if (!title) throw new Error("Add a title");
+    const members = await readMembersFile();
+    const allowedNames = members.map((member) => member.name);
+    const assignedTo = requireRosterAssignee(input.assignedTo, allowedNames);
+    const items = await readDeliverablesFile();
+    const item = stamp(
+      normalizeDeliverable({
+        id: uniqueId(
+          title,
+          items.map((row) => row.id)
+        ),
+        title,
+        assignedTo,
+        dueDate: input.dueDate,
+        startDate: input.startDate ?? null,
+        done: false,
+        notes: input.notes ?? "",
+        updatedAt: null,
+        updatedBy: null,
+      }),
+      input.actor,
+      allowedNames
+    );
+    items.push(item);
+    await writeDeliverablesFile(items);
+    return item;
+  });
+}
+
+export function patchDeliverable(id: string, patch: DeliverablePatch): Promise<Deliverable> {
+  return enqueue(async () => {
+    const items = await readDeliverablesFile();
+    const index = items.findIndex((item) => item.id === id);
+    if (index === -1) throw new Error("Task not found");
+    const current = items[index];
+    const members = await readMembersFile();
+    const allowedNames = members.map((member) => member.name);
+    const assignedTo =
+      patch.assignedTo === undefined
+        ? current.assignedTo
+        : requireRosterAssignee(patch.assignedTo, allowedNames);
+    const next = stamp(
+      normalizeDeliverable({
+        ...current,
+        title: patch.title === undefined ? current.title : patch.title.trim(),
+        assignedTo,
+        dueDate: patch.dueDate === undefined ? current.dueDate : patch.dueDate,
+        startDate: patch.startDate === undefined ? current.startDate : patch.startDate,
+        done: patch.done === undefined ? current.done : patch.done,
+        notes: patch.notes === undefined ? current.notes : patch.notes,
+      }),
+      patch.actor,
+      allowedNames
+    );
+    if (!next.title) throw new Error("Add a title");
+    items[index] = next;
+    await writeDeliverablesFile(items);
+    return next;
+  });
+}
+
+export function deleteDeliverable(id: string): Promise<void> {
+  return enqueue(async () => {
+    const items = await readDeliverablesFile();
+    const next = items.filter((item) => item.id !== id);
+    if (next.length === items.length) throw new Error("Task not found");
+    await writeDeliverablesFile(next);
+  });
+}
+
 export function updateSettings(patch: Partial<Settings>): Promise<Settings> {
   return enqueue(async () => {
     const current = await readSettingsFile();
@@ -813,6 +988,27 @@ export function patchMember(id: string, patch: MemberPatch): Promise<Member> {
         }
       }
       if (guestsChanged) await writeGuestsFile(guests);
+
+      const deliverables = await readDeliverablesFile();
+      let deliverablesChanged = false;
+      for (let i = 0; i < deliverables.length; i++) {
+        const item = deliverables[i];
+        let changed = false;
+        const updated = { ...item };
+        if (matchesPrevious(item.assignedTo)) {
+          updated.assignedTo = next.name;
+          changed = true;
+        }
+        if (matchesPrevious(item.updatedBy)) {
+          updated.updatedBy = next.name;
+          changed = true;
+        }
+        if (changed) {
+          deliverables[i] = updated;
+          deliverablesChanged = true;
+        }
+      }
+      if (deliverablesChanged) await writeDeliverablesFile(deliverables);
     }
 
     return next;
@@ -826,6 +1022,7 @@ export function deleteMember(
   members: Member[];
   leads: Lead[];
   guests: Guest[];
+  deliverables: Deliverable[];
 }> {
   return enqueue(async () => {
     assertTeamAdminActor(actor);
@@ -838,10 +1035,12 @@ export function deleteMember(
     const allowed = nextMembers.map((member) => member.name);
     const leads = clearMissingLeadAssignees(await readLeadsFile(), allowed);
     const guests = clearMissingGuestAssignees(await readGuestsFile(), allowed);
+    // Tasks still need an owner name — keep the last roster label.
+    const deliverables = await readDeliverablesFile();
     await writeLeadsFile(leads);
     await writeGuestsFile(guests);
 
-    return { members: nextMembers, leads, guests };
+    return { members: nextMembers, leads, guests, deliverables };
   });
 }
 
