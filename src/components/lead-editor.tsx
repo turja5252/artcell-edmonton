@@ -19,9 +19,13 @@ import { formatMoney, parseMoney } from "@/lib/money";
 import { isTeamAdmin } from "@/lib/team-admin";
 import {
   isDeclinedOutcome,
+  isInProgressOutcome,
   isLeadDeclined,
+  isLeadInProgress,
+  isStampedWaitingOutcome,
   MONEY_CHIPS,
   OUTCOME_CHIPS,
+  WAITING_STAMP,
   type Lead,
 } from "@/lib/types";
 
@@ -90,6 +94,9 @@ function LeadEditorForm({
   const [assignedTo, setAssignedTo] = useState(lead.assignedTo ?? "");
   const [done, setDone] = useState(lead.done);
   const [declined, setDeclined] = useState(isLeadDeclined(lead));
+  const [inProgress, setInProgress] = useState(
+    lead.inProgress || isLeadInProgress(lead)
+  );
   const [committed, setCommitted] = useState(lead.committed ? String(lead.committed) : "");
   const [received, setReceived] = useState(lead.received ? String(lead.received) : "");
   const [receivedBy, setReceivedBy] = useState(() => {
@@ -108,6 +115,7 @@ function LeadEditorForm({
     assignedTo?: string;
     done?: boolean;
     declined?: boolean;
+    inProgress?: boolean;
     committed?: string;
     received?: string;
     receivedBy?: string;
@@ -116,12 +124,20 @@ function LeadEditorForm({
     const nextOutcome = next.outcome ?? outcome;
     const nextAssigned = next.assignedTo ?? assignedTo;
     const nextDone = next.done ?? done;
-    const nextDeclined =
+    let nextDeclined =
       next.declined !== undefined
         ? next.declined
         : next.outcome !== undefined
           ? isDeclinedOutcome(nextOutcome)
           : declined;
+    let nextInProgress =
+      next.inProgress !== undefined
+        ? next.inProgress
+        : next.outcome !== undefined && isInProgressOutcome(nextOutcome)
+          ? true
+          : inProgress;
+    if (next.inProgress === true) nextDeclined = false;
+    if (nextDeclined) nextInProgress = false;
     const nextCommitted = next.committed ?? committed;
     const nextReceived = next.received ?? received;
     let nextReceivedBy = next.receivedBy ?? receivedBy;
@@ -140,6 +156,9 @@ function LeadEditorForm({
     setAssignedTo(nextAssigned);
     setDone(nextDone);
     setDeclined(nextDeclined);
+    setInProgress(
+      nextDeclined ? false : nextInProgress || isInProgressOutcome(nextOutcome)
+    );
     setCommitted(nextCommitted);
     setReceived(nextReceived);
     setReceivedBy(nextReceivedBy);
@@ -149,6 +168,7 @@ function LeadEditorForm({
       assignedTo: nextAssigned || null,
       done: nextDone,
       declined: nextDeclined,
+      inProgress: nextInProgress,
       committed: parseMoney(nextCommitted),
       received: parsedReceived,
       receivedBy: parsedReceived > 0 ? nextReceivedBy || null : null,
@@ -326,6 +346,8 @@ function LeadEditorForm({
                     persist({
                       outcome: chip,
                       declined: chip === "Declined",
+                      inProgress:
+                        chip === "Declined" ? false : isInProgressOutcome(chip),
                     })
                   }
                 >
@@ -361,6 +383,7 @@ function LeadEditorForm({
                 outcome,
                 done,
                 declined,
+                inProgress,
                 committed,
                 received,
                 receivedBy,
@@ -389,11 +412,44 @@ function LeadEditorForm({
               }
               void persist({
                 declined: true,
+                inProgress: false,
                 outcome: outcome.trim() || "Declined",
               });
             }}
           >
             {declined ? "Clear declined" : "Mark declined"}
+          </Button>
+          <Button
+            type="button"
+            className={
+              inProgress
+                ? "h-12 w-full border-amber-300 bg-amber-400 text-base text-zinc-950 hover:bg-amber-300"
+                : "h-12 w-full text-base"
+            }
+            variant={inProgress ? "outline" : "secondary"}
+            disabled={busy || deleting}
+            onClick={() => {
+              if (inProgress) {
+                void persist({
+                  inProgress: false,
+                  outcome: isStampedWaitingOutcome(outcome) ? "" : outcome,
+                });
+                return;
+              }
+              const trimmed = outcome.trim();
+              const shortDecline =
+                /^(declined\.?|said no|not interested|pass|nope|no thanks)$/i.test(
+                  trimmed
+                );
+              void persist({
+                inProgress: true,
+                declined: false,
+                done: false,
+                outcome: !trimmed || shortDecline ? WAITING_STAMP : outcome,
+              });
+            }}
+          >
+            {inProgress ? "Clear in progress" : "Mark in progress"}
           </Button>
           <Button
             type="button"

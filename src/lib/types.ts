@@ -24,6 +24,8 @@ export type Lead = {
   assignedTo: string | null;
   done: boolean;
   declined: boolean;
+  /** Explicit “work started” toggle. Outcome waiting language also counts. */
+  inProgress: boolean;
   outcome: string;
   committed: number;
   received: number;
@@ -39,6 +41,7 @@ export type LeadPatch = Partial<
     | "assignedTo"
     | "done"
     | "declined"
+    | "inProgress"
     | "outcome"
     | "company"
     | "committed"
@@ -172,11 +175,20 @@ export const DECLINED_GLOW_CLASS = "lead-glow-declined";
 /** Green glow for pledged or received money (Calls + Money). */
 export const MONEY_GLOW_CLASS = "lead-glow-money";
 
+/** Yellow glow for in-progress / waiting (Calls + Money). */
+export const PROGRESS_GLOW_CLASS = "lead-glow-progress";
+
 export const DECLINED_PILL_CLASS =
   "inline-flex items-center rounded-full bg-red-600 px-2.5 py-0.5 text-xs font-semibold text-white shadow-[0_0_10px_rgba(239,68,68,0.7)]";
 
 export const MONEY_PILL_CLASS =
   "inline-flex items-center rounded-full bg-emerald-600 px-2.5 py-0.5 text-xs font-semibold text-white shadow-[0_0_10px_rgba(16,185,129,0.65)]";
+
+export const PROGRESS_PILL_CLASS =
+  "inline-flex items-center rounded-full bg-amber-400 px-2.5 py-0.5 text-xs font-semibold text-zinc-950 shadow-[0_0_10px_rgba(251,191,36,0.75)]";
+
+/** Stamped when Mark in progress is tapped and the outcome is empty. */
+export const WAITING_STAMP = "Waiting for reply.";
 
 export function hasLeadMoney(lead: {
   committed?: number | null;
@@ -186,11 +198,16 @@ export function hasLeadMoney(lead: {
 }
 
 /**
- * Glow precedence: declined red wins even if they pledged or paid.
- * Then green if committed or received is above zero. Otherwise no glow.
+ * Glow precedence:
+ * 1. Declined → red (even with money or waiting notes)
+ * 2. Pledged/received money → green (money beats “waiting”)
+ * 3. In progress / waiting language or inProgress flag → yellow
+ * 4. Else none
  */
 export function leadGlowClass(lead: {
   declined?: boolean | null;
+  inProgress?: boolean | null;
+  done?: boolean | null;
   outcome?: string | null;
   notes?: string | null;
   committed?: number | null;
@@ -198,7 +215,21 @@ export function leadGlowClass(lead: {
 }): string | undefined {
   if (isLeadDeclined(lead)) return DECLINED_GLOW_CLASS;
   if (hasLeadMoney(lead)) return MONEY_GLOW_CLASS;
+  if (isLeadInProgress(lead)) return PROGRESS_GLOW_CLASS;
   return undefined;
+}
+
+/** True when the yellow glow would apply (after declined/money precedence). */
+export function leadShowsProgressGlow(lead: {
+  declined?: boolean | null;
+  inProgress?: boolean | null;
+  done?: boolean | null;
+  outcome?: string | null;
+  notes?: string | null;
+  committed?: number | null;
+  received?: number | null;
+}): boolean {
+  return leadGlowClass(lead) === PROGRESS_GLOW_CLASS;
 }
 
 const DECLINED_OUTCOME_RE =
@@ -230,6 +261,58 @@ export function isLeadDeclined(lead: {
   notes?: string | null;
 }): boolean {
   return resolveLeadDeclined(lead);
+}
+
+const IN_PROGRESS_OUTCOME_RE =
+  /\b(?:waiting|wait|reply|meeting|booked|scheduled|follow[\s-]+up|called|left\s+voicemail|voicemail|emailed|sent|pending|in\s+progress|working|callback|call\s+back)\b/i;
+
+const WAITING_LABEL_RE =
+  /\b(?:waiting|wait|reply|callback|call\s+back|pending|voicemail|left\s+voicemail)\b/i;
+
+export function isInProgressOutcome(outcome: string | null | undefined): boolean {
+  const text = (outcome ?? "").trim();
+  if (!text) return false;
+  return IN_PROGRESS_OUTCOME_RE.test(text);
+}
+
+export function isStampedWaitingOutcome(outcome: string | null | undefined): boolean {
+  return /^(waiting for reply\.?)$/i.test((outcome ?? "").trim());
+}
+
+/**
+ * Yellow means work is in motion: explicit flag, or waiting/meeting language
+ * in outcome/notes. Completed leads do not get yellow from the flag alone —
+ * only if the outcome still matches.
+ */
+export function resolveLeadInProgress(lead: {
+  inProgress?: boolean | null;
+  done?: boolean | null;
+  outcome?: string | null;
+  notes?: string | null;
+}): boolean {
+  if (isInProgressOutcome(lead.outcome) || isInProgressOutcome(lead.notes)) {
+    return true;
+  }
+  if (lead.inProgress === true && lead.done !== true) return true;
+  return false;
+}
+
+export function isLeadInProgress(lead: {
+  inProgress?: boolean | null;
+  done?: boolean | null;
+  outcome?: string | null;
+  notes?: string | null;
+}): boolean {
+  return resolveLeadInProgress(lead);
+}
+
+export function leadProgressLabel(lead: {
+  outcome?: string | null;
+  notes?: string | null;
+}): "Waiting" | "In progress" {
+  const text = `${lead.outcome ?? ""} ${lead.notes ?? ""}`;
+  if (WAITING_LABEL_RE.test(text)) return "Waiting";
+  return "In progress";
 }
 
 export const GUEST_STATUSES: { id: GuestStatus; label: string }[] = [

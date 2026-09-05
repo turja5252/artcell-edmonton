@@ -138,6 +138,21 @@
   background-color: color-mix(in oklab, var(--card) 78%, #064e3b);
 }
 
+.lead-glow-progress {
+  position: relative;
+  z-index: 1;
+  overflow: visible !important;
+  border-color: #eab308 !important;
+  border-width: 2px;
+  outline: 3px solid #fde047;
+  outline-offset: 2px;
+  box-shadow:
+    0 0 0 3px rgba(234, 179, 8, 0.95),
+    0 0 22px 6px rgba(250, 204, 21, 0.75),
+    0 0 48px 12px rgba(202, 138, 4, 0.5) !important;
+  background-color: color-mix(in oklab, var(--card) 78%, #713f12);
+}
+
 /* Overdue tasks: amber rail + wash. Not the red declined-sponsor glow. */
 .task-overdue {
   border-left-width: 4px;

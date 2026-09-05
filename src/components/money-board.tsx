@@ -5,8 +5,11 @@ import { countableMoney, formatMoney } from "@/lib/money";
 import {
   DECLINED_PILL_CLASS,
   MONEY_PILL_CLASS,
+  PROGRESS_PILL_CLASS,
   isLeadDeclined,
   leadGlowClass,
+  leadProgressLabel,
+  leadShowsProgressGlow,
   type Lead,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -123,6 +126,7 @@ export function MoneyBoard({ leads, members, target, onSetTarget, onOpenLead }: 
             const declined = isLeadDeclined(lead);
             const money = countableMoney(lead);
             const glow = leadGlowClass(lead);
+            const progress = leadShowsProgressGlow(lead);
             return (
             <li
               key={lead.id}
@@ -150,6 +154,10 @@ export function MoneyBoard({ leads, members, target, onSetTarget, onOpenLead }: 
                       <span className={MONEY_PILL_CLASS}>Pledged</span>
                     ) : money.received > 0 ? (
                       <span className={MONEY_PILL_CLASS}>Received</span>
+                    ) : progress ? (
+                      <span className={PROGRESS_PILL_CLASS}>
+                        {leadProgressLabel(lead)}
+                      </span>
                     ) : null}
                   </span>
                 </span>

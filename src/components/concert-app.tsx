@@ -59,8 +59,12 @@ import {
   displayGuestName,
   DECLINED_PILL_CLASS,
   MONEY_PILL_CLASS,
+  PROGRESS_PILL_CLASS,
   isLeadDeclined,
+  isLeadInProgress,
   leadGlowClass,
+  leadProgressLabel,
+  leadShowsProgressGlow,
 } from "@/lib/types";
 import {
   ADMIN_DISPLAY_NAME,
@@ -102,7 +106,7 @@ type Filter = "mine" | "open" | "unassigned" | "done" | "all";
 function matches(lead: Lead, query: string, filter: Filter, me: string) {
   const haystack = `${lead.company} ${lead.assignedTo ?? ""} ${lead.outcome} ${
     isLeadDeclined(lead) ? "declined" : ""
-  }`.toLowerCase();
+  } ${isLeadInProgress(lead) ? "waiting in progress" : ""}`.toLowerCase();
   if (query && !haystack.includes(query.toLowerCase())) return false;
   if (filter === "mine") return Boolean(me) && samePerson(lead.assignedTo, me);
   if (filter === "open") return !lead.done;
@@ -1467,6 +1471,7 @@ function LeadCard({
 }) {
   const mine = Boolean(me) && samePerson(lead.assignedTo, me);
   const declined = isLeadDeclined(lead);
+  const progress = leadShowsProgressGlow(lead);
   return (
     <article
       className={cn(
@@ -1486,6 +1491,9 @@ function LeadCard({
                 <span className="text-xs text-primary">Nobody claimed this yet</span>
               )}
               {declined ? <span className={DECLINED_PILL_CLASS}>Declined</span> : null}
+              {progress ? (
+                <span className={PROGRESS_PILL_CLASS}>{leadProgressLabel(lead)}</span>
+              ) : null}
               {lead.done ? (
                 <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-300">
                   Completed

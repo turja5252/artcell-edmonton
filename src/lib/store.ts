@@ -128,6 +128,7 @@ function normalizeLead(lead: Partial<Lead> & { company: string; id: string }): L
       outcome,
       notes: "notes" in lead ? String((lead as { notes?: unknown }).notes ?? "") : "",
     }),
+    inProgress: Boolean(lead.inProgress),
     outcome,
     committed: parseMoney(lead.committed),
     received: parseMoney(lead.received),
@@ -454,6 +455,7 @@ export function createLead(input: {
         assignedTo: resolveAssignee(input.assignedTo, allowedNames),
         done: false,
         declined: false,
+        inProgress: false,
         outcome: "",
         committed: 0,
         received: 0,
@@ -508,6 +510,12 @@ export function patchLead(id: string, patch: LeadPatch): Promise<Lead> {
               declined: current.declined,
               outcome,
             });
+    const inProgress =
+      patch.inProgress !== undefined
+        ? Boolean(patch.inProgress)
+        : declined
+          ? false
+          : Boolean(current.inProgress);
     const next = stamp(
       normalizeLead({
         ...current,
@@ -515,6 +523,7 @@ export function patchLead(id: string, patch: LeadPatch): Promise<Lead> {
         assignedTo,
         done: patch.done ?? current.done,
         declined,
+        inProgress,
         outcome,
         committed:
           patch.committed === undefined ? current.committed : parseMoney(patch.committed),
@@ -648,6 +657,7 @@ export function mergeSheetRows(
             assignedTo: row.assignedTo?.trim() || null,
             done: false,
             declined: false,
+            inProgress: false,
             outcome: "",
             committed: 0,
             received: 0,
