@@ -210,7 +210,7 @@ export const MC_CHAPTERS: McChapter[] = [
         speaker: "TN",
         title: "Housekeeping — the room",
         script:
-          "A proud Bangladeshi night also means we take care of this building. Food and drink stay out of the foyer and the hall. Tim Hortons and the restaurants are right outside when you step out. Leave this place cleaner than we found it. Respect the room. Respect each other. Then we make some noise.",
+          "A proud Bangladeshi night also means we take care of this building. Food and drink are fine in the foyer — not in the hall. If you need something, Tim Hortons and the restaurants are right outside the hall. Leave this place cleaner than we found it. Respect the room. Respect each other. Then we make some noise.",
       },
     ],
   },

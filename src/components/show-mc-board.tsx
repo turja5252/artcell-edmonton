@@ -354,7 +354,7 @@ function SponsorCard() {
             >
               <span className={speakerPill(speaker)}>{speakerLabel(speaker)}</span>
               <p className={cn("mt-1 text-base font-semibold leading-snug", speakerText(speaker))}>
-                {row.tier} sponsor, {row.name}
+                {row.tier} sponsor, {spokenSponsor(row)}
               </p>
             </li>
           );
