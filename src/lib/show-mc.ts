@@ -92,6 +92,50 @@ function spokenSponsor(row: SponsorRow): string {
   return `${row.name} — ${row.note}`;
 }
 
+function thanksCues(): McCue[] {
+  const rows: { id: string; title: string; level: string; names: string; note?: string }[] = [
+    { id: "sound", title: "Sound", level: "Sound.", names: "Shihab Bhai." },
+    {
+      id: "archive",
+      title: "Dhaka Archive",
+      level: "Dhaka Archive.",
+      names: `${THANKS.dhakaArchive.join(", ")}.`,
+    },
+    { id: "bccb", title: "BCCB", level: "BCCB.", names: "Khaled Bari." },
+    { id: "photo", title: "Photography", level: "On the lens.", names: "Imran Kabir." },
+    {
+      id: "digital",
+      title: "DEXCEL MEDIA",
+      level: "Digital media.",
+      names: "DEXCEL MEDIA.",
+      note: "Still need the person’s name. Add it if you get it before 10:15.",
+    },
+    {
+      id: "volunteers",
+      title: "Volunteers",
+      level: "Volunteers.",
+      names: `${THANKS.volunteers.join(", ")}.`,
+    },
+    {
+      id: "sponsors",
+      title: "Sponsors",
+      level: "Every sponsor who said yes.",
+      names: "You made a Bangladeshi night feel like it belongs in Edmonton.",
+    },
+  ];
+  return rows.map((row) => ({
+    id: `close-${row.id}`,
+    speaker: "BOTH" as const,
+    title: row.title,
+    script: "",
+    lines: [
+      { speaker: "TN", text: row.level },
+      { speaker: "RS", text: row.names },
+    ],
+    note: row.note,
+  }));
+}
+
 function sponsorCues(): McCue[] {
   const speeches: Record<string, string> = {
     "Spectrum Family Law": "Conan Taylor and Ayesha Siddiqua — come through.",
@@ -326,16 +370,15 @@ export const MC_CHAPTERS: McChapter[] = [
     clock: "10:15 PM",
     startMin: min(22, 15),
     endMin: min(23, 30),
-    summary: "Vote of thanks, then everyone on stage — one family photo with Artcell. Do not rush the names.",
+    summary: "Vote of thanks in tandem — TN calls the role, RS reads the names — then everyone on stage for the family photo.",
     cues: [
       {
-        id: "close-thanks",
+        id: "close-open",
         speaker: "TN",
-        title: "Vote of thanks",
-        script:
-          "Before we let the lights win — thank you. Sound: Shihab Bhai. Dhaka Archive: Raiyan, Suddho, Tahiat, Jamal. BCCB: Khaled Bari. On the lens: Imran Kabir. DEXCEL MEDIA. And the volunteers who ran this building: Sathi Saha, Fahim, Navid, Mouri, Shenin, Simran, Shihab, Muntasir. Every sponsor who said yes. You made a Bangladeshi night feel like it belongs in Edmonton.",
-        note: "DEXCEL MEDIA still needs a person’s name. Add it if you get it before 10:15.",
+        title: "Open the thanks",
+        script: "Before we let the lights win — thank you. I call the role. RS reads the name.",
       },
+      ...thanksCues(),
       {
         id: "close-photo",
         speaker: "BOTH",
