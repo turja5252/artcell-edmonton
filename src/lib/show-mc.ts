@@ -44,7 +44,7 @@ export const SPONSORS: SponsorRow[] = [
   { tier: "Platinum", name: "3MT Property Ventures" },
   { tier: "Silver", name: "Swodeshi Immigration Service" },
   { tier: "Silver", name: "Elite Integrity Service", note: "Tanzim’s employer" },
-  { tier: "Silver", name: "Ketek Group", note: "Raiyan’s employer" },
+  { tier: "Silver", name: "Ketek Group Industrial Solutions and Rentals", note: "Raiyan’s employer" },
   { tier: "Silver", name: "Mahbub Mollah — Realtor" },
   { tier: "Bronze", name: "Mohsin Alam — Realtor" },
   { tier: "Bronze", name: "Top Donair and Poutine" },
