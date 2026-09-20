@@ -93,8 +93,10 @@ export function ShowMcBoard({ me }: { me: string }) {
           </p>
         </div>
         <p className="mt-2 text-sm text-muted-foreground">
-          TN is Tanzim. RS takes city, safety, Dhaka Archive Bangla, and the sponsor open.
-          {iAmTn ? " Your lines are marked TN." : ""}
+          <span className="font-semibold text-sky-300">Blue is TN</span>
+          {iAmTn ? " (you)" : " · Tanzim"}
+          . <span className="font-semibold text-pink-300">Pink is RS</span>
+          . Together cues stay neutral.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           <Button
@@ -164,7 +166,7 @@ export function ShowMcBoard({ me }: { me: string }) {
             key={item.id}
             type="button"
             variant={filter === item.id ? "default" : "outline"}
-            className="h-10 shrink-0 rounded-full px-3"
+            className={cn("h-10 shrink-0 rounded-full px-3", filterChip(item.id, filter === item.id))}
             onClick={() => setFilter(item.id)}
           >
             {item.label}
@@ -270,11 +272,18 @@ function ChapterCard({
                   </Button>
                 </div>
                 {cue.scriptBn ? (
-                  <p className="font-bengali mt-3 text-lg leading-relaxed whitespace-pre-wrap">
+                  <p
+                    className={cn(
+                      "font-bengali mt-3 text-lg leading-relaxed whitespace-pre-wrap",
+                      speakerText(cue.speaker)
+                    )}
+                  >
                     {cue.scriptBn}
                   </p>
                 ) : null}
-                <p className="mt-3 text-base leading-relaxed">{cue.script}</p>
+                <p className={cn("mt-3 text-base leading-relaxed", speakerText(cue.speaker))}>
+                  {cue.script}
+                </p>
                 {cue.note ? (
                   <p className="mt-2 text-xs text-muted-foreground">{cue.note}</p>
                 ) : null}
@@ -330,17 +339,34 @@ function SponsorCard() {
 }
 
 function speakerFrame(speaker: McSpeaker): string {
-  if (speaker === "TN") return "border-primary/40 bg-primary/10";
-  if (speaker === "RS") return "border-sky-400/40 bg-sky-400/10";
+  if (speaker === "TN") return "border-sky-400/70 bg-sky-500/15";
+  if (speaker === "RS") return "border-pink-400/70 bg-pink-500/15";
   return "border-border/80 bg-background/40";
+}
+
+function speakerText(speaker: McSpeaker): string {
+  if (speaker === "TN") return "text-sky-100";
+  if (speaker === "RS") return "text-pink-100";
+  return "text-foreground";
 }
 
 function speakerPill(speaker: McSpeaker): string {
   if (speaker === "TN") {
-    return "inline-flex rounded-full bg-primary px-2.5 py-0.5 text-xs font-semibold text-primary-foreground";
-  }
-  if (speaker === "RS") {
     return "inline-flex rounded-full bg-sky-400 px-2.5 py-0.5 text-xs font-semibold text-zinc-950";
   }
+  if (speaker === "RS") {
+    return "inline-flex rounded-full bg-pink-400 px-2.5 py-0.5 text-xs font-semibold text-zinc-950";
+  }
   return "inline-flex rounded-full bg-secondary px-2.5 py-0.5 text-xs font-semibold";
+}
+
+function filterChip(id: SpeakerFilter, active: boolean): string {
+  if (!active) {
+    if (id === "TN") return "border-sky-400/50 text-sky-200";
+    if (id === "RS") return "border-pink-400/50 text-pink-200";
+    return "";
+  }
+  if (id === "TN") return "border-sky-400 bg-sky-400 text-zinc-950 hover:bg-sky-300";
+  if (id === "RS") return "border-pink-400 bg-pink-400 text-zinc-950 hover:bg-pink-300";
+  return "";
 }
