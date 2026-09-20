@@ -190,13 +190,15 @@ export const MC_CHAPTERS: McChapter[] = [
         title: "Paint the city",
         script:
           "Let me talk about this city for a second. Edmonton is a festival city. A river city. The capital — and it actually shows up for culture. Diversity is not a slogan in this room. It is the people sitting next to you. Tonight Edmonton painted itself for Artcell.",
+        note: "Keep your class and style. Tanzim starts whispering Artcell under you. Let him. When you hear it, look at him. He takes the next line.",
       },
       {
         id: "open-audience",
         speaker: "TN",
         title: "Find the audience",
         script:
-          "We want to know who is in this room. Students — if this is your night, make some noise. University of Alberta. MacEwan. If Artcell raised you, this is the cheer they came for. Edmonton, wake this band up.",
+          "Artcell. Artcell. Artcell.\n\nBut tonight is about Artcell. Tonight is about rock music. Rock shaped our culture unlike anything else. We used to save up for a guitar. For a concert. For a copied CD. For a pirate MP3. That is a more powerful culture than anything else.\n\nAnd tell me, Rowshon — when you outclass a board meeting, what compliment do you get? You were a rockstar? Or you were a classical dancer?",
+        note: "Start whispering Artcell while Rowshon is still on the city — slow, then a little louder, until she looks at you. Then take the rest playful. Hold the question for her.",
       },
       {
         id: "open-house-rs",
