@@ -1025,7 +1025,7 @@ export function ConcertApp({
           input.speaker === "TN"
             ? "TN has this line"
             : input.speaker === "RS"
-              ? "RS has this line"
+              ? "Rowshon has this line"
               : "Both of you have this line"
         );
       } else {

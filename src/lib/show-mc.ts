@@ -168,7 +168,7 @@ export const MC_CHAPTERS: McChapter[] = [
     clock: "6:30 PM",
     startMin: min(18, 30),
     endMin: min(18, 40),
-    summary: "TN and RS walk on. Welcome the room, paint Edmonton, find the students, then two minutes of house rules.",
+    summary: "Tanzim and Rowshon walk on. Welcome the room, paint Edmonton, find the students, then two minutes of house rules.",
     cues: [
       {
         id: "open-enter",
@@ -236,7 +236,7 @@ export const MC_CHAPTERS: McChapter[] = [
         speaker: "TN",
         title: "Why the sponsors matter",
         script:
-          "None of this room is an accident. These are Canadian businesses saying a Bangladeshi night belongs in this city. They did not just write a cheque. They stood behind the night. That is integration — not a speech about Canada. After Dhaka Archive we bring them on stage one by one. I take the blues. RS takes the pinks. Title sponsors get a quick word.",
+          "None of this room is an accident. These are Canadian businesses saying a Bangladeshi night belongs in this city. They did not just write a cheque. They stood behind the night. That is integration — not a speech about Canada. After Dhaka Archive we bring them on stage one by one. I take the blues. Rowshon takes the pinks. Title sponsors get a quick word.",
         note: "Do not read the list here. Invites are on the colored cues at 7:30.",
       },
       {
@@ -256,7 +256,7 @@ export const MC_CHAPTERS: McChapter[] = [
     clock: "6:45 PM",
     startMin: min(18, 45),
     endMin: min(19, 30),
-    summary: "RS tells the origin in Bangla. TN adds the swag. Then you leave the stage to them until 7:30.",
+    summary: "Rowshon tells the origin in Bangla. Tanzim adds the swag. Then you leave the stage to them until 7:30.",
     cues: [
       {
         id: "archive-rs",
@@ -317,7 +317,7 @@ export const MC_CHAPTERS: McChapter[] = [
     clock: "8:00 PM",
     startMin: min(20, 0),
     endMin: min(22, 15),
-    summary: "RS opens Artcell for real — welcome the band, hold the room. TN takes the underground shout, then the 9:00 stretch and 9:15 recall.",
+    summary: "Rowshon opens Artcell for real — welcome the band, hold the room. Tanzim takes the underground shout, then the 9:00 stretch and 9:15 recall.",
     cues: [
       {
         id: "artcell-open-rs",
@@ -605,8 +605,8 @@ export function showClockState(now = new Date(), concertDate?: string): ShowCloc
 
 export function speakerLabel(speaker: McSpeaker): string {
   if (speaker === "TN") return "TN · Tanzim";
-  if (speaker === "RS") return "RS";
-  return "TN + RS";
+  if (speaker === "RS") return "RS · Rowshon";
+  return "TN + Rowshon";
 }
 
 export function cueMatchesSpeaker(cue: McCue, filter: "all" | McSpeaker): boolean {

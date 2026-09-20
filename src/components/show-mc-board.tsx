@@ -83,6 +83,7 @@ export function ShowMcBoard({
   const live = chapterAtMinute(minute);
   const timer = showClockState(liveNow, concertDate);
   const iAmTn = /tanzim/i.test(me);
+  const iAmRs = /rowshon/i.test(me);
   const editedCount = Object.keys(prompts.cues).length;
 
   const applied = useMemo(() => applyMcOverrides(MC_CHAPTERS, prompts), [prompts]);
@@ -131,14 +132,15 @@ export function ShowMcBoard({
               : `${timer.headline} until this chapter`}
         </p>
         <p className="mt-2 text-sm text-muted-foreground">
-          <span className="font-semibold text-sky-300">Blue is TN</span>
-          {iAmTn ? " (you)" : " · Tanzim"}
-          . <span className="font-semibold text-pink-300">Pink is RS</span>
-          . One full sponsor each. Blue is you. Pink is RS. Same for the vote of thanks.
+          <span className="font-semibold text-sky-300">Blue is TN · Tanzim</span>
+          {iAmTn ? " (you)" : ""}
+          . <span className="font-semibold text-pink-300">Pink is RS · Rowshon</span>
+          {iAmRs ? " (you)" : ""}
+          . One full sponsor each. Same for the vote of thanks.
         </p>
         <p className="mt-2 text-sm text-foreground">
-          Slide the grip to change order. Tap TN / RS / Both to switch who speaks. Edit saves the
-          wording. All of that is shared
+          Slide the grip to change order. Tap TN, Rowshon, or Both to switch who speaks. Edit saves
+          the wording. All of that is shared
           {editedCount ? ` · ${editedCount} line${editedCount === 1 ? "" : "s"} changed` : ""}.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -201,7 +203,7 @@ export function ShowMcBoard({
           [
             { id: "all", label: "All cues" },
             { id: "TN", label: "TN lines" },
-            { id: "RS", label: "RS lines" },
+            { id: "RS", label: "Rowshon" },
             { id: "BOTH", label: "Together" },
           ] as { id: SpeakerFilter; label: string }[]
         ).map((item) => (
@@ -601,7 +603,7 @@ function SponsorCard({ chapters }: { chapters: McChapter[] }) {
       <p className="text-[11px] tracking-wide text-primary uppercase">Glance list</p>
       <h2 className="font-heading mt-1 text-2xl leading-none">Sponsors and thanks</h2>
       <p className="mt-2 text-sm text-muted-foreground">
-        One full line each. Blue is TN. Pink is RS. Edits on the cues above show up here too.
+        One full line each. Blue is TN · Tanzim. Pink is RS · Rowshon. Edits on the cues above show up here too.
       </p>
 
       <h3 className="mt-4 text-sm font-semibold">Who walks up</h3>
@@ -658,7 +660,7 @@ function SpeakerPick({
       {(
         [
           { id: "TN", label: "TN" },
-          { id: "RS", label: "RS" },
+          { id: "RS", label: "Rowshon" },
           { id: "BOTH", label: "Both" },
         ] as { id: McSpeaker; label: string }[]
       ).map((item) => {
