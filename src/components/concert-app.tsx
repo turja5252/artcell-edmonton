@@ -154,7 +154,7 @@ export function ConcertApp({
   const [settings, setSettings] = useState<Settings>(initialSettings);
   const [deliverables, setDeliverables] = useState<Deliverable[]>(initialDeliverables);
   const [media, setMedia] = useState<MediaItem[]>(initialMedia);
-  const [tab, setTab] = useState<Tab>("outreach");
+  const [tab, setTab] = useState<Tab>("show-mc");
   const [mediaUploading, setMediaUploading] = useState(false);
   const [mediaUploadProgress, setMediaUploadProgress] = useState<number | null>(null);
   const [mediaRemovingId, setMediaRemovingId] = useState<string | null>(null);
