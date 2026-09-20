@@ -47,7 +47,7 @@ SPONSORS = [
     ("Sudipto", "Sathi", False, ""),
     ("Shatkahon", "Sathi", False, ""),
     ("Sheila", "Tanvir/Tajul Bhai", False, ""),
-    ("Ketek", "Raiyan", False, ""),
+    ("KLetek Group", "Raiyan", False, ""),
     ("Tanvir Bhai", "Shuddho", False, ""),
     ("Donair & Poutine", "Fahim", False, ""),
     ("Mizan Bhai", "Fahim", False, ""),
