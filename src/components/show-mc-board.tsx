@@ -1,29 +1,52 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Check, Clock3, RotateCcw } from "lucide-react";
+import { Check, Clock3, Pencil, RotateCcw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { useShowNow } from "@/components/show-clock";
+import { Input } from "@/components/ui/input";
 import {
-  MC_CHAPTERS,
-  SPONSOR_SPEECHES,
-  SPONSORS,
-  spokenSponsor,
-  thanksCues,
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Textarea } from "@/components/ui/textarea";
+import { useShowNow } from "@/components/show-clock";
+import { formatTime } from "@/lib/people";
+import {
+  applyMcOverrides,
   chapterAtMinute,
   cueMatchesSpeaker,
+  EMPTY_MC_PROMPTS,
+  findStockCue,
+  isMcCueOverridden,
+  MC_CHAPTERS,
   minutesInZone,
   showClockState,
   speakerLabel,
+  SPONSOR_SPEECHES,
   type McChapter,
+  type McCue,
   type McSpeaker,
 } from "@/lib/show-mc";
+import type { McPromptStore } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const DONE_KEY = "artcell-edmonton-mc-done";
 
 type SpeakerFilter = "all" | McSpeaker;
+
+type PromptPatch = {
+  id: string;
+  title?: string;
+  script?: string;
+  scriptBn?: string;
+  note?: string;
+  reset?: boolean;
+};
 
 function readDone(): string[] {
   try {
@@ -39,12 +62,23 @@ function writeDone(ids: string[]) {
   window.localStorage.setItem(DONE_KEY, JSON.stringify(ids));
 }
 
-export function ShowMcBoard({ me, concertDate }: { me: string; concertDate?: string }) {
+export function ShowMcBoard({
+  me,
+  concertDate,
+  prompts = EMPTY_MC_PROMPTS,
+  onSavePrompt,
+}: {
+  me: string;
+  concertDate?: string;
+  prompts?: McPromptStore;
+  onSavePrompt: (input: PromptPatch) => Promise<void>;
+}) {
   const now = useShowNow();
   const [filter, setFilter] = useState<SpeakerFilter>("all");
   const [focusId, setFocusId] = useState<string | null>(null);
   const [done, setDone] = useState<string[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const [editing, setEditing] = useState<McCue | null>(null);
 
   useEffect(() => {
     setDone(readDone());
@@ -56,13 +90,18 @@ export function ShowMcBoard({ me, concertDate }: { me: string; concertDate?: str
   const live = chapterAtMinute(minute);
   const timer = showClockState(liveNow, concertDate);
   const iAmTn = /tanzim/i.test(me);
+  const editedCount = Object.keys(prompts.cues).length;
+
+  const applied = useMemo(() => applyMcOverrides(MC_CHAPTERS, prompts.cues), [prompts]);
 
   const chapters = useMemo(() => {
-    return MC_CHAPTERS.map((chapter) => ({
-      ...chapter,
-      cues: chapter.cues.filter((cue) => cueMatchesSpeaker(cue, filter)),
-    })).filter((chapter) => chapter.cues.length > 0);
-  }, [filter]);
+    return applied
+      .map((chapter) => ({
+        ...chapter,
+        cues: chapter.cues.filter((cue) => cueMatchesSpeaker(cue, filter)),
+      }))
+      .filter((chapter) => chapter.cues.length > 0);
+  }, [applied, filter]);
 
   const visible = focusId ? chapters.filter((chapter) => chapter.id === focusId) : chapters;
   const doneCount = MC_CHAPTERS.flatMap((chapter) => chapter.cues).filter((cue) =>
@@ -102,6 +141,10 @@ export function ShowMcBoard({ me, concertDate }: { me: string; concertDate?: str
           {iAmTn ? " (you)" : " · Tanzim"}
           . <span className="font-semibold text-pink-300">Pink is RS</span>
           . One full sponsor each. Blue is you. Pink is RS. Same for the vote of thanks.
+        </p>
+        <p className="mt-2 text-sm text-foreground">
+          Tap Edit on any cue. Saves for both phones
+          {editedCount ? ` · ${editedCount} line${editedCount === 1 ? "" : "s"} changed` : ""}.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           <Button
@@ -194,12 +237,14 @@ export function ShowMcBoard({ me, concertDate }: { me: string; concertDate?: str
             live={chapter.id === live.id}
             done={done}
             showTicks={hydrated}
+            prompts={prompts}
             onToggle={toggle}
+            onEdit={setEditing}
           />
         ))
       )}
 
-      <SponsorCard />
+      <SponsorCard chapters={applied} />
 
       <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
         <p>
@@ -210,6 +255,15 @@ export function ShowMcBoard({ me, concertDate }: { me: string; concertDate?: str
           Reset ticks
         </Button>
       </div>
+
+      <McPromptEditor
+        cue={editing}
+        prompts={prompts}
+        onOpenChange={(open) => {
+          if (!open) setEditing(null);
+        }}
+        onSave={onSavePrompt}
+      />
     </div>
   );
 }
@@ -219,13 +273,17 @@ function ChapterCard({
   live,
   done,
   showTicks,
+  prompts,
   onToggle,
+  onEdit,
 }: {
   chapter: McChapter;
   live: boolean;
   done: string[];
   showTicks: boolean;
+  prompts: McPromptStore;
   onToggle: (id: string) => void;
+  onEdit: (cue: McCue) => void;
 }) {
   return (
     <section
@@ -253,6 +311,8 @@ function ChapterCard({
       <ul className="mt-4 space-y-3">
         {chapter.cues.map((cue) => {
           const ticked = showTicks && done.includes(cue.id);
+          const edited = isMcCueOverridden(cue.id, prompts);
+          const override = prompts.cues[cue.id];
           return (
             <li key={cue.id}>
               <article
@@ -264,17 +324,33 @@ function ChapterCard({
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <span className={speakerPill(cue.speaker)}>{speakerLabel(cue.speaker)}</span>
+                    {edited ? (
+                      <span className="ml-2 inline-flex rounded-full bg-amber-400 px-2 py-0.5 text-xs font-semibold text-zinc-950">
+                        Edited
+                      </span>
+                    ) : null}
                     <h3 className="mt-2 text-base font-semibold leading-tight">{cue.title}</h3>
                   </div>
-                  <Button
-                    type="button"
-                    variant={ticked ? "outline" : "secondary"}
-                    className="h-11 shrink-0 px-3"
-                    onClick={() => onToggle(cue.id)}
-                  >
-                    <Check className="size-4" />
-                    {ticked ? "Undo" : "Done"}
-                  </Button>
+                  <div className="flex shrink-0 gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-11 px-3"
+                      onClick={() => onEdit(cue)}
+                    >
+                      <Pencil className="size-4" />
+                      Edit
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={ticked ? "outline" : "secondary"}
+                      className="h-11 px-3"
+                      onClick={() => onToggle(cue.id)}
+                    >
+                      <Check className="size-4" />
+                      {ticked ? "Undo" : "Done"}
+                    </Button>
+                  </div>
                 </div>
                 {cue.scriptBn ? (
                   <p
@@ -315,6 +391,12 @@ function ChapterCard({
                 {cue.note ? (
                   <p className="mt-2 text-xs text-muted-foreground">{cue.note}</p>
                 ) : null}
+                {edited && override?.updatedAt ? (
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    Edited {formatTime(override.updatedAt)}
+                    {override.updatedBy ? ` · ${override.updatedBy}` : ""}
+                  </p>
+                ) : null}
               </article>
             </li>
           );
@@ -324,13 +406,162 @@ function ChapterCard({
   );
 }
 
-function SponsorCard() {
+function McPromptEditor({
+  cue,
+  prompts,
+  onOpenChange,
+  onSave,
+}: {
+  cue: McCue | null;
+  prompts: McPromptStore;
+  onOpenChange: (open: boolean) => void;
+  onSave: (input: PromptPatch) => Promise<void>;
+}) {
+  const stock = cue ? findStockCue(cue.id) : null;
+  const [title, setTitle] = useState("");
+  const [script, setScript] = useState("");
+  const [scriptBn, setScriptBn] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [formError, setFormError] = useState("");
+
+  useEffect(() => {
+    if (!cue) return;
+    setTitle(cue.title);
+    setScript(cue.script);
+    setScriptBn(cue.scriptBn ?? "");
+    setNote(cue.note ?? "");
+    setFormError("");
+  }, [cue]);
+
+  const edited = cue ? isMcCueOverridden(cue.id, prompts) : false;
+
+  async function submit(reset = false) {
+    if (!cue) return;
+    setBusy(true);
+    setFormError("");
+    try {
+      await onSave(
+        reset
+          ? { id: cue.id, reset: true }
+          : { id: cue.id, title, script, scriptBn, note }
+      );
+      onOpenChange(false);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Could not save prompt");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Sheet open={Boolean(cue)} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="bottom"
+        className="max-h-[92dvh] gap-0 overflow-y-auto rounded-t-3xl sm:max-w-none"
+      >
+        <SheetHeader className="pb-2">
+          <SheetTitle className="font-heading text-2xl tracking-wide">
+            Edit this line
+          </SheetTitle>
+          <SheetDescription>
+            {cue ? `${speakerLabel(cue.speaker)} · ${cue.title}` : "Change the spoken line."}{" "}
+            Saves for both phones. Reset puts the original back.
+          </SheetDescription>
+        </SheetHeader>
+        <form
+          className="space-y-3 px-4 pb-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit(false);
+          }}
+        >
+          <label className="block text-xs font-medium tracking-wide text-muted-foreground uppercase">
+            Title
+            <Input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              className="mt-1 h-12 text-base"
+            />
+          </label>
+          <label className="block text-xs font-medium tracking-wide text-muted-foreground uppercase">
+            What to say
+            <Textarea
+              value={script}
+              onChange={(event) => setScript(event.target.value)}
+              className="mt-1 min-h-36 text-base leading-relaxed"
+            />
+          </label>
+          <label className="block text-xs font-medium tracking-wide text-muted-foreground uppercase">
+            Bangla
+            <Textarea
+              value={scriptBn}
+              onChange={(event) => setScriptBn(event.target.value)}
+              className="font-bengali mt-1 min-h-28 text-lg leading-relaxed"
+              placeholder="Optional — Dhaka Archive and any other Bangla line"
+            />
+          </label>
+          <label className="block text-xs font-medium tracking-wide text-muted-foreground uppercase">
+            Side note
+            <Textarea
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              className="mt-1 min-h-20 text-base"
+              placeholder="Hold, point, or who walks up"
+            />
+          </label>
+          {stock && edited ? (
+            <p className="text-xs text-muted-foreground">
+              Original starts: {stock.script.slice(0, 90)}
+              {stock.script.length > 90 ? "…" : ""}
+            </p>
+          ) : null}
+          {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
+          <SheetFooter className="px-0">
+            {edited ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="h-12 w-full"
+                disabled={busy}
+                onClick={() => void submit(true)}
+              >
+                <RotateCcw className="size-4" />
+                {busy ? "Saving…" : "Reset to original"}
+              </Button>
+            ) : null}
+            <Button type="submit" className="h-12 w-full" disabled={busy}>
+              {busy ? "Saving…" : "Save for both phones"}
+            </Button>
+          </SheetFooter>
+        </form>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function SponsorCard({ chapters }: { chapters: McChapter[] }) {
+  const sponsorCues =
+    chapters
+      .find((chapter) => chapter.id === "sponsors")
+      ?.cues.filter(
+        (cue) =>
+          cue.id.startsWith("sponsors-") &&
+          cue.id !== "sponsors-open" &&
+          cue.id !== "sponsors-recall"
+      ) ?? [];
+  const thanks =
+    chapters
+      .find((chapter) => chapter.id === "close")
+      ?.cues.filter((cue) => cue.id.startsWith("close-") && cue.id !== "close-open" && cue.id !== "close-photo") ??
+    [];
+
   return (
     <section className="rounded-2xl border border-border/80 bg-card/80 p-4">
       <p className="text-[11px] tracking-wide text-primary uppercase">Glance list</p>
       <h2 className="font-heading mt-1 text-2xl leading-none">Sponsors and thanks</h2>
       <p className="mt-2 text-sm text-muted-foreground">
-        One full line each. Blue is TN. Pink is RS.
+        One full line each. Blue is TN. Pink is RS. Edits on the cues above show up here too.
       </p>
 
       <h3 className="mt-4 text-sm font-semibold">Who walks up</h3>
@@ -345,25 +576,19 @@ function SponsorCard() {
 
       <h3 className="mt-4 text-sm font-semibold">Tandem board</h3>
       <ul className="mt-2 space-y-2">
-        {SPONSORS.map((row, index) => {
-          const speaker = index % 2 === 0 ? "TN" : "RS";
-          return (
-            <li
-              key={`${row.tier}-${row.name}`}
-              className={cn("rounded-xl px-3 py-2", speakerFrame(speaker))}
-            >
-              <span className={speakerPill(speaker)}>{speakerLabel(speaker)}</span>
-              <p className={cn("mt-1 text-base font-semibold leading-snug", speakerText(speaker))}>
-                {row.tier} sponsor, {spokenSponsor(row)}
-              </p>
-            </li>
-          );
-        })}
+        {sponsorCues.map((cue) => (
+          <li key={cue.id} className={cn("rounded-xl px-3 py-2", speakerFrame(cue.speaker))}>
+            <span className={speakerPill(cue.speaker)}>{speakerLabel(cue.speaker)}</span>
+            <p className={cn("mt-1 text-base font-semibold leading-snug", speakerText(cue.speaker))}>
+              {cue.script}
+            </p>
+          </li>
+        ))}
       </ul>
 
       <h3 className="mt-4 text-sm font-semibold">10:15 thanks</h3>
       <ul className="mt-2 space-y-2">
-        {thanksCues().map((cue) => (
+        {thanks.map((cue) => (
           <li key={cue.id} className={cn("rounded-xl px-3 py-2", speakerFrame(cue.speaker))}>
             <span className={speakerPill(cue.speaker)}>{speakerLabel(cue.speaker)}</span>
             <p className={cn("mt-1 text-base font-semibold leading-snug", speakerText(cue.speaker))}>

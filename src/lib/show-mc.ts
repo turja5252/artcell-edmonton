@@ -1,4 +1,5 @@
 import { daysUntilConcert, normalizeConcertDate } from "@/lib/concert-date";
+import type { McCueOverride, McPromptStore } from "@/lib/types";
 
 export type McSpeaker = "TN" | "RS" | "BOTH";
 
@@ -613,4 +614,39 @@ export function cueMatchesSpeaker(cue: McCue, filter: "all" | McSpeaker): boolea
   if (cue.lines?.some((line) => line.speaker === filter)) return true;
   if (cue.speaker === "BOTH") return true;
   return cue.speaker === filter;
+}
+
+export const EMPTY_MC_PROMPTS: McPromptStore = { cues: {}, updatedAt: null };
+
+export function isMcCueOverridden(id: string, store: McPromptStore | null | undefined): boolean {
+  return Boolean(store?.cues?.[id]);
+}
+
+export function allStockCues(): McCue[] {
+  return MC_CHAPTERS.flatMap((chapter) => chapter.cues);
+}
+
+export function findStockCue(id: string): McCue | null {
+  return allStockCues().find((cue) => cue.id === id) ?? null;
+}
+
+export function applyMcOverrides(
+  chapters: McChapter[],
+  overrides: Record<string, McCueOverride> | undefined
+): McChapter[] {
+  if (!overrides || Object.keys(overrides).length === 0) return chapters;
+  return chapters.map((chapter) => ({
+    ...chapter,
+    cues: chapter.cues.map((cue) => {
+      const patch = overrides[cue.id];
+      if (!patch) return cue;
+      return {
+        ...cue,
+        title: patch.title?.trim() || cue.title,
+        script: patch.script !== undefined ? patch.script : cue.script,
+        scriptBn: patch.scriptBn !== undefined ? patch.scriptBn : cue.scriptBn,
+        note: patch.note !== undefined ? patch.note : cue.note,
+      };
+    }),
+  }));
 }

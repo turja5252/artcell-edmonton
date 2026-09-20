@@ -160,6 +160,20 @@ export type MediaItem = {
   durationSeconds?: number | null;
 };
 
+export type McCueOverride = {
+  title?: string;
+  script?: string;
+  scriptBn?: string;
+  note?: string;
+  updatedAt?: string;
+  updatedBy?: string | null;
+};
+
+export type McPromptStore = {
+  cues: Record<string, McCueOverride>;
+  updatedAt: string | null;
+};
+
 export type BoardSnapshot = {
   leads: Lead[];
   guests: Guest[];
@@ -168,6 +182,7 @@ export type BoardSnapshot = {
   deliverables: Deliverable[];
   media: MediaItem[];
   mediaDeletedIds: string[];
+  mcPrompts: McPromptStore;
   writtenAt: string | null;
 };
 

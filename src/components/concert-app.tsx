@@ -52,6 +52,7 @@ import {
   mergeLeads,
   mergeMedia,
   mergeMembers,
+  mergeMcPrompts,
   mergeSettings,
   parseUpdatedAt,
   snapshotStamp,
@@ -59,7 +60,17 @@ import {
 import { applyGuestPatch } from "@/lib/guest-patch";
 import { formatMoney } from "@/lib/money";
 import { formatTime } from "@/lib/people";
-import type { Deliverable, Guest, GuestStatus, Lead, MediaItem, Member, Settings } from "@/lib/types";
+import { EMPTY_MC_PROMPTS } from "@/lib/show-mc";
+import type {
+  Deliverable,
+  Guest,
+  GuestStatus,
+  Lead,
+  MediaItem,
+  McPromptStore,
+  Member,
+  Settings,
+} from "@/lib/types";
 import {
   displayGuestName,
   DECLINED_PILL_CLASS,
@@ -127,6 +138,7 @@ export function ConcertApp({
   initialSettings,
   initialDeliverables,
   initialMedia,
+  initialMcPrompts = EMPTY_MC_PROMPTS,
   initialError = "",
 }: {
   initialLeads: Lead[];
@@ -135,6 +147,7 @@ export function ConcertApp({
   initialSettings: Settings;
   initialDeliverables: Deliverable[];
   initialMedia: MediaItem[];
+  initialMcPrompts?: McPromptStore;
   initialError?: string;
 }) {
   const me = useSyncExternalStore(subscribeMe, readMe, () => "");
@@ -154,6 +167,7 @@ export function ConcertApp({
   const [settings, setSettings] = useState<Settings>(initialSettings);
   const [deliverables, setDeliverables] = useState<Deliverable[]>(initialDeliverables);
   const [media, setMedia] = useState<MediaItem[]>(initialMedia);
+  const [mcPrompts, setMcPrompts] = useState<McPromptStore>(initialMcPrompts);
   const [tab, setTab] = useState<Tab>("show-mc");
   const [mediaUploading, setMediaUploading] = useState(false);
   const [mediaUploadProgress, setMediaUploadProgress] = useState<number | null>(null);
@@ -182,6 +196,7 @@ export function ConcertApp({
   const memberSaving = useRef(false);
   const settingsSaving = useRef(false);
   const mediaSaving = useRef(false);
+  const mcSaving = useRef(false);
   const identityHold = useRef<number | null>(null);
   const brandTaps = useRef<number[]>([]);
   const deletedIds = useRef({
@@ -238,6 +253,7 @@ export function ConcertApp({
       deliverables?: Deliverable[];
       media?: MediaItem[];
       mediaDeletedIds?: string[];
+      mcPrompts?: McPromptStore;
     },
     mode: "poll" | "replace"
   ) {
@@ -271,6 +287,7 @@ export function ConcertApp({
           )
         );
       }
+      if (data.mcPrompts) setMcPrompts(data.mcPrompts);
       return;
     }
     if (data.leads) {
@@ -323,6 +340,11 @@ export function ConcertApp({
         )
       );
     }
+    if (data.mcPrompts) {
+      setMcPrompts((current) =>
+        mergeMcPrompts(current, data.mcPrompts!, lastWriteById.current, busyIdRef.current)
+      );
+    }
   }
 
   function saveInFlight() {
@@ -332,6 +354,7 @@ export function ConcertApp({
       memberSaving.current ||
       settingsSaving.current ||
       mediaSaving.current ||
+      mcSaving.current ||
       Date.now() - Math.max(lastSaveAt.current, lastWriteAt.current) <
         SAVE_POLL_DEBOUNCE_MS
     );
@@ -348,6 +371,7 @@ export function ConcertApp({
       deliverables?: Deliverable[];
       media?: MediaItem[];
       mediaDeletedIds?: string[];
+      mcPrompts?: McPromptStore;
       writtenAt?: string | null;
       error?: string;
     };
@@ -938,6 +962,43 @@ export function ConcertApp({
     }
   }
 
+  async function saveMcPrompt(input: {
+    id: string;
+    title?: string;
+    script?: string;
+    scriptBn?: string;
+    note?: string;
+    reset?: boolean;
+  }) {
+    mcSaving.current = true;
+    busyIdRef.current = input.id;
+    markSaveStart();
+    try {
+      const response = await fetch("/api/mc-prompts", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...input, actor: me || null }),
+      });
+      const data = (await response.json()) as { mcPrompts?: McPromptStore; error?: string };
+      if (!response.ok) throw new Error(data.error || "Could not save prompt");
+      if (data.mcPrompts) {
+        noteSuccessfulWrite(
+          `mc:${input.id}`,
+          data.mcPrompts.cues[input.id]?.updatedAt ?? data.mcPrompts.updatedAt
+        );
+        setMcPrompts(data.mcPrompts);
+      }
+      setToast(input.reset ? "Back to the original line" : "Prompt saved for both phones");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save prompt");
+      throw err;
+    } finally {
+      mcSaving.current = false;
+      busyIdRef.current = null;
+      markSaveEnd();
+    }
+  }
+
   async function saveSettings(patch: Partial<Settings>) {
     const next = { ...settings, ...patch };
     setSettings(next);
@@ -1105,7 +1166,7 @@ export function ConcertApp({
         </div>
       ) : null}
 
-      {error && tab !== "media" && tab !== "show-mc" ? (
+      {error && tab !== "media" ? (
         <div className="mt-3 rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {error}
           <Button
@@ -1278,7 +1339,12 @@ export function ConcertApp({
 
       {tab === "show-mc" && (
         <section className="mt-5 flex-1">
-          <ShowMcBoard me={me} concertDate={settings.concertDate} />
+          <ShowMcBoard
+            me={me}
+            concertDate={settings.concertDate}
+            prompts={mcPrompts}
+            onSavePrompt={saveMcPrompt}
+          />
         </section>
       )}
 

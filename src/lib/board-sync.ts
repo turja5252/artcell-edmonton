@@ -1,5 +1,5 @@
 import { canonicalizeTicketUrl } from "@/lib/tickets";
-import type { Deliverable, Guest, Lead, MediaItem, Member, Settings } from "@/lib/types";
+import type { Deliverable, Guest, Lead, MediaItem, McPromptStore, Member, Settings } from "@/lib/types";
 
 export function parseUpdatedAt(value: string | null | undefined): number {
   if (!value) return 0;
@@ -42,6 +42,7 @@ export function snapshotStamp(input: {
   deliverables?: Array<{ updatedAt?: string | null }>;
   media?: Array<{ uploadedAt?: string | null; updatedAt?: string | null }>;
   settings?: { ticketsSoldUpdatedAt?: string | null } | null;
+  mcPrompts?: { updatedAt?: string | null } | null;
 }): number {
   const meta = parseUpdatedAt(input.writtenAt);
   if (meta > 0) return meta;
@@ -54,7 +55,8 @@ export function snapshotStamp(input: {
         updatedAt: item.updatedAt ?? item.uploadedAt,
       }))
     ),
-    parseUpdatedAt(input.settings?.ticketsSoldUpdatedAt)
+    parseUpdatedAt(input.settings?.ticketsSoldUpdatedAt),
+    parseUpdatedAt(input.mcPrompts?.updatedAt)
   );
 }
 
@@ -185,6 +187,61 @@ export function mergeMembers(
   }
 
   return merged.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export function mergeMcPrompts(
+  local: McPromptStore,
+  remote: McPromptStore,
+  lastWriteById?: Map<string, number>,
+  pendingId?: string | null
+): McPromptStore {
+  const ids = new Set([...Object.keys(local.cues), ...Object.keys(remote.cues)]);
+  const cues: McPromptStore["cues"] = {};
+  const remoteStoreNewer = isRemoteNewer(local.updatedAt, remote.updatedAt);
+
+  for (const id of ids) {
+    const loc = local.cues[id];
+    const rem = remote.cues[id];
+    const writeAt = lastWriteById?.get(`mc:${id}`) ?? 0;
+
+    if (pendingId === id) {
+      if (loc) cues[id] = loc;
+      continue;
+    }
+
+    if (writeAt > 0) {
+      if (loc) {
+        if (!rem || parseUpdatedAt(rem.updatedAt) <= writeAt) {
+          cues[id] = loc;
+          continue;
+        }
+      } else if (!rem || parseUpdatedAt(rem.updatedAt) <= writeAt) {
+        continue;
+      }
+    }
+
+    if (loc && rem) {
+      cues[id] = isRemoteNewer(loc.updatedAt, rem.updatedAt) ? rem : loc;
+      continue;
+    }
+    if (rem && !loc) {
+      cues[id] = rem;
+      continue;
+    }
+    if (loc && !rem) {
+      if (remoteStoreNewer && parseUpdatedAt(remote.updatedAt) > parseUpdatedAt(loc.updatedAt)) {
+        continue;
+      }
+      cues[id] = loc;
+    }
+  }
+
+  return {
+    cues,
+    updatedAt: isRemoteNewer(local.updatedAt, remote.updatedAt)
+      ? remote.updatedAt
+      : local.updatedAt,
+  };
 }
 
 export function mergeSettings(local: Settings, remote: Settings): Settings {

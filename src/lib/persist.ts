@@ -14,6 +14,7 @@ const LIVE_JSON = new Set([
   "deliverables.json",
   "media.json",
   "media-deleted.json",
+  "mc-prompts.json",
 ]);
 
 type CacheEntry = {

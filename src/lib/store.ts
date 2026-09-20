@@ -12,6 +12,7 @@ import type {
   LeadAttachment,
   LeadPatch,
   MediaItem,
+  McPromptStore,
   Member,
   MemberPatch,
   Settings,
@@ -73,6 +74,7 @@ const SETTINGS_FILE = "settings.json";
 const DELIVERABLES_FILE = "deliverables.json";
 const MEDIA_FILE = "media.json";
 const MEDIA_DELETED_FILE = "media-deleted.json";
+const MC_PROMPTS_FILE = "mc-prompts.json";
 
 type MediaDeleted = {
   ids: string[];
@@ -400,6 +402,90 @@ export function listMedia(): Promise<MediaItem[]> {
   return enqueue(readMediaFileList);
 }
 
+function normalizeMcPrompts(raw: Partial<McPromptStore> | null | undefined): McPromptStore {
+  const cues: McPromptStore["cues"] = {};
+  if (raw?.cues && typeof raw.cues === "object") {
+    for (const [id, value] of Object.entries(raw.cues)) {
+      if (!id || !value || typeof value !== "object") continue;
+      cues[id] = {
+        title: typeof value.title === "string" ? value.title : undefined,
+        script: typeof value.script === "string" ? value.script : undefined,
+        scriptBn: typeof value.scriptBn === "string" ? value.scriptBn : undefined,
+        note: typeof value.note === "string" ? value.note : undefined,
+        updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : undefined,
+        updatedBy:
+          typeof value.updatedBy === "string" && value.updatedBy.trim()
+            ? value.updatedBy.trim()
+            : value.updatedBy === null
+              ? null
+              : undefined,
+      };
+    }
+  }
+  return {
+    cues,
+    updatedAt: typeof raw?.updatedAt === "string" ? raw.updatedAt : null,
+  };
+}
+
+async function readMcPromptsFile(): Promise<McPromptStore> {
+  const parsed = await readJsonFile<McPromptStore>(MC_PROMPTS_FILE, {
+    cues: {},
+    updatedAt: null,
+  });
+  return normalizeMcPrompts(parsed);
+}
+
+async function writeMcPromptsFile(store: McPromptStore) {
+  await writeJsonFile(MC_PROMPTS_FILE, store);
+}
+
+export function getMcPrompts(): Promise<McPromptStore> {
+  return enqueue(readMcPromptsFile);
+}
+
+export function patchMcPrompt(input: {
+  id: string;
+  title?: string;
+  script?: string;
+  scriptBn?: string;
+  note?: string;
+  reset?: boolean;
+  actor?: string | null;
+}): Promise<McPromptStore> {
+  return enqueue(async () => {
+    const { findStockCue } = await import("@/lib/show-mc");
+    const stock = findStockCue(input.id);
+    if (!stock) throw new Error("That cue is not on the night");
+    const current = await readMcPromptsFile();
+    const now = new Date().toISOString();
+    const actor = input.actor?.trim() || null;
+    if (input.reset) {
+      const { [input.id]: _removed, ...rest } = current.cues;
+      const next = { cues: rest, updatedAt: now };
+      await writeMcPromptsFile(next);
+      return next;
+    }
+    const next = {
+      cues: {
+        ...current.cues,
+        [input.id]: {
+          ...current.cues[input.id],
+          title: input.title !== undefined ? input.title : current.cues[input.id]?.title,
+          script: input.script !== undefined ? input.script : current.cues[input.id]?.script,
+          scriptBn: input.scriptBn !== undefined ? input.scriptBn : current.cues[input.id]?.scriptBn,
+          note: input.note !== undefined ? input.note : current.cues[input.id]?.note,
+          updatedAt: now,
+          updatedBy: actor,
+        },
+      },
+      updatedAt: now,
+    };
+    await writeMcPromptsFile(next);
+    return next;
+  });
+}
+
 export function getBoard(): Promise<BoardSnapshot> {
   return enqueue(async () => {
     const membersRaw = await readJsonFile<Member[]>(MEMBERS_FILE, []);
@@ -411,6 +497,7 @@ export function getBoard(): Promise<BoardSnapshot> {
     const mediaOriginal = await readMediaFileList();
     const mediaDeletedIds = [...(await readMediaDeletedIds())];
     const settings = await readSettingsFile();
+    const mcPrompts = await readMcPromptsFile();
     const meta = await readBoardWriteMeta();
 
     // Empty roster is a blob miss / fallback — never "clear everyone".
@@ -461,7 +548,7 @@ export function getBoard(): Promise<BoardSnapshot> {
           ? new Date(computed).toISOString()
           : metaStamp;
 
-    return { leads, guests, members, settings, deliverables, media, mediaDeletedIds, writtenAt };
+    return { leads, guests, members, settings, deliverables, media, mediaDeletedIds, mcPrompts, writtenAt };
   });
 }
 
