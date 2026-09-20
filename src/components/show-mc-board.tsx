@@ -10,6 +10,7 @@ import {
   SPONSOR_SPEECHES,
   SPONSORS,
   THANKS,
+  thanksCues,
   chapterAtMinute,
   cueMatchesSpeaker,
   minutesInZone,
@@ -360,10 +361,18 @@ function SponsorCard() {
         })}
       </ul>
 
-      <h3 className="mt-4 text-sm font-semibold">10:15 names</h3>
-      <p className="mt-2 text-sm leading-relaxed">
-        Sound: {THANKS.sound}. Dhaka Archive: {THANKS.dhakaArchive.join(", ")}. BCCB: {THANKS.bccb}.
-        Photo: {THANKS.photo}. {THANKS.digital}. Volunteers: {THANKS.volunteers.join(", ")}.
+      <h3 className="mt-4 text-sm font-semibold">10:15 thanks</h3>
+      <ul className="mt-2 space-y-2">
+        {thanksCues().map((cue) => (
+          <li key={cue.id} className={cn("rounded-xl px-3 py-2", speakerFrame(cue.speaker))}>
+            <span className={speakerPill(cue.speaker)}>{speakerLabel(cue.speaker)}</span>
+            <p className={cn("mt-1 text-base font-semibold leading-snug", speakerText(cue.speaker))}>
+              {cue.script}
+            </p>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 text-sm text-muted-foreground">
         Then everyone on stage for the family photo.
       </p>
     </section>

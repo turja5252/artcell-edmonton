@@ -64,7 +64,7 @@ export const SPONSOR_SPEECHES: { company: string; speakers: string }[] = [
 export const THANKS = {
   sound: "Shihab Bhai",
   dhakaArchive: ["Raiyan", "Suddho", "Tahiat", "Jamal"],
-  bccb: "Khaled Bari (Novel)",
+  bccb: "Khaled Bari Novel",
   photo: "Imran Kabir",
   digital: "DEXCEL MEDIA — still need the person’s name",
   volunteers: [
@@ -92,25 +92,25 @@ function spokenSponsor(row: SponsorRow): string {
   return `${row.name} — ${row.note}`;
 }
 
-function thanksCues(): McCue[] {
+export function thanksCues(): McCue[] {
   const rows: { id: string; title: string; script: string; note?: string }[] = [
-    { id: "sound", title: "Sound", script: "Sound — Shihab Bhai." },
+    { id: "sound", title: "Sound — Shihab Bhai", script: "Sound — Shihab Bhai." },
     {
       id: "archive",
-      title: "Dhaka Archive",
+      title: `Dhaka Archive — ${THANKS.dhakaArchive.join(", ")}`,
       script: `Dhaka Archive — ${THANKS.dhakaArchive.join(", ")}.`,
     },
-    { id: "bccb", title: "BCCB", script: "BCCB — Khaled Bari." },
-    { id: "photo", title: "Photography", script: "On the lens — Imran Kabir." },
+    { id: "bccb", title: "BCCB — Khaled Bari Novel", script: "BCCB — Khaled Bari Novel." },
+    { id: "photo", title: "On the lens — Imran Kabir", script: "On the lens — Imran Kabir." },
     {
       id: "digital",
-      title: "DEXCEL MEDIA",
+      title: "Digital media — DEXCEL MEDIA",
       script: "Digital media — DEXCEL MEDIA.",
       note: "Still need the person’s name. Add it if you get it before 10:15.",
     },
     {
       id: "volunteers",
-      title: "Volunteers",
+      title: `Volunteers — ${THANKS.volunteers.join(", ")}`,
       script: `Volunteers — ${THANKS.volunteers.join(", ")}.`,
     },
     {
