@@ -100,7 +100,7 @@ export function ShowMcBoard({ me, concertDate }: { me: string; concertDate?: str
           <span className="font-semibold text-sky-300">Blue is TN</span>
           {iAmTn ? " (you)" : " · Tanzim"}
           . <span className="font-semibold text-pink-300">Pink is RS</span>
-          . You call the level in blue. RS reads every sponsor name in pink.
+          . One full sponsor each. Blue is you. Pink is RS. Same for the vote of thanks.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           <Button
@@ -329,7 +329,7 @@ function SponsorCard() {
       <p className="text-[11px] tracking-wide text-primary uppercase">Glance list</p>
       <h2 className="font-heading mt-1 text-2xl leading-none">Sponsors and thanks</h2>
       <p className="mt-2 text-sm text-muted-foreground">
-        RS reads the pink name. TN hits the blue level first.
+        One full line each. Blue is TN. Pink is RS.
       </p>
 
       <h3 className="mt-4 text-sm font-semibold">Who walks up</h3>
@@ -342,22 +342,22 @@ function SponsorCard() {
         ))}
       </ul>
 
-      <h3 className="mt-4 text-sm font-semibold">RS name sheet</h3>
+      <h3 className="mt-4 text-sm font-semibold">Tandem board</h3>
       <ul className="mt-2 space-y-2">
-        {SPONSORS.map((row) => (
-          <li key={`${row.tier}-${row.name}`} className="rounded-xl border border-border/60 p-2">
-            <p className={cn("rounded-lg px-3 py-1.5 text-sm", speakerFrame("TN"))}>
-              <span className={speakerPill("TN")}>TN</span>
-              <span className={cn("ml-2", speakerText("TN"))}>{row.tier} sponsor</span>
-            </p>
-            <p className={cn("mt-1 rounded-lg px-3 py-2", speakerFrame("RS"))}>
-              <span className={speakerPill("RS")}>RS</span>
-              <span className="mt-1 block text-lg font-semibold leading-snug text-pink-50">
-                {row.name}
-              </span>
-            </p>
-          </li>
-        ))}
+        {SPONSORS.map((row, index) => {
+          const speaker = index % 2 === 0 ? "TN" : "RS";
+          return (
+            <li
+              key={`${row.tier}-${row.name}`}
+              className={cn("rounded-xl px-3 py-2", speakerFrame(speaker))}
+            >
+              <span className={speakerPill(speaker)}>{speakerLabel(speaker)}</span>
+              <p className={cn("mt-1 text-base font-semibold leading-snug", speakerText(speaker))}>
+                {row.tier} sponsor, {row.name}
+              </p>
+            </li>
+          );
+        })}
       </ul>
 
       <h3 className="mt-4 text-sm font-semibold">10:15 names</h3>

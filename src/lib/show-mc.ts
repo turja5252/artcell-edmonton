@@ -93,47 +93,43 @@ function spokenSponsor(row: SponsorRow): string {
 }
 
 function thanksCues(): McCue[] {
-  const rows: { id: string; title: string; level: string; names: string; note?: string }[] = [
-    { id: "sound", title: "Sound", level: "Sound.", names: "Shihab Bhai." },
+  const rows: { id: string; title: string; script: string; note?: string }[] = [
+    { id: "sound", title: "Sound", script: "Sound — Shihab Bhai." },
     {
       id: "archive",
       title: "Dhaka Archive",
-      level: "Dhaka Archive.",
-      names: `${THANKS.dhakaArchive.join(", ")}.`,
+      script: `Dhaka Archive — ${THANKS.dhakaArchive.join(", ")}.`,
     },
-    { id: "bccb", title: "BCCB", level: "BCCB.", names: "Khaled Bari." },
-    { id: "photo", title: "Photography", level: "On the lens.", names: "Imran Kabir." },
+    { id: "bccb", title: "BCCB", script: "BCCB — Khaled Bari." },
+    { id: "photo", title: "Photography", script: "On the lens — Imran Kabir." },
     {
       id: "digital",
       title: "DEXCEL MEDIA",
-      level: "Digital media.",
-      names: "DEXCEL MEDIA.",
+      script: "Digital media — DEXCEL MEDIA.",
       note: "Still need the person’s name. Add it if you get it before 10:15.",
     },
     {
       id: "volunteers",
       title: "Volunteers",
-      level: "Volunteers.",
-      names: `${THANKS.volunteers.join(", ")}.`,
+      script: `Volunteers — ${THANKS.volunteers.join(", ")}.`,
     },
     {
       id: "sponsors",
       title: "Sponsors",
-      level: "Every sponsor who said yes.",
-      names: "You made a Bangladeshi night feel like it belongs in Edmonton.",
+      script:
+        "Every sponsor who said yes. You made a Bangladeshi night feel like it belongs in Edmonton.",
     },
   ];
-  return rows.map((row) => ({
-    id: `close-${row.id}`,
-    speaker: "BOTH" as const,
-    title: row.title,
-    script: "",
-    lines: [
-      { speaker: "TN", text: row.level },
-      { speaker: "RS", text: row.names },
-    ],
-    note: row.note,
-  }));
+  return rows.map((row, index) => {
+    const speaker = index % 2 === 0 ? "TN" : "RS";
+    return {
+      id: `close-${row.id}`,
+      speaker,
+      title: row.title,
+      script: row.script,
+      note: row.note,
+    };
+  });
 }
 
 function sponsorCues(): McCue[] {
@@ -145,20 +141,16 @@ function sponsorCues(): McCue[] {
   const extraNotes: Record<string, string> = {
     "3MT Property Ventures": "No speaker name on the sheet. Confirm who walks up.",
   };
-  return SPONSORS.map((row) => {
+  return SPONSORS.map((row, index) => {
+    const speaker = index % 2 === 0 ? "TN" : "RS";
     const speech = speeches[row.name];
     const extra = extraNotes[row.name];
-    const lines: McLine[] = [
-      { speaker: "TN", text: `${row.tier} sponsor.` },
-      { speaker: "RS", text: `${spokenSponsor(row)}.` },
-    ];
-    if (speech) lines.push({ speaker: "TN", text: speech });
+    const full = `${row.tier} sponsor, ${spokenSponsor(row)}.`;
     return {
       id: `sponsors-${sponsorSlug(row.name)}`,
-      speaker: "BOTH",
-      title: row.name,
-      script: "",
-      lines,
+      speaker,
+      title: `${row.tier} · ${row.name}`,
+      script: speech ? `${full} ${speech}` : full,
       note: extra,
     };
   });
@@ -240,8 +232,8 @@ export const MC_CHAPTERS: McChapter[] = [
         speaker: "TN",
         title: "Why the sponsors matter",
         script:
-          "None of this room is an accident. These are Canadian businesses saying a Bangladeshi night belongs in this city. They did not just write a cheque. They stood behind the night. That is integration — not a speech about Canada. After Dhaka Archive, I call the level. RS reads every name.",
-        note: "Do not read the list here. Names are on RS’s pink lines in Sponsor showcase.",
+          "None of this room is an accident. These are Canadian businesses saying a Bangladeshi night belongs in this city. They did not just write a cheque. They stood behind the night. That is integration — not a speech about Canada. After Dhaka Archive we name them one by one. I take the blues. RS takes the pinks. Each of us says the full sponsor.",
+        note: "Do not read the list here. Full names are on the colored cues in Sponsor showcase.",
       },
       {
         id: "outline-nick",
@@ -295,14 +287,14 @@ export const MC_CHAPTERS: McChapter[] = [
     clock: "7:30 PM",
     startMin: min(19, 30),
     endMin: min(20, 0),
-    summary: "Tandem: TN (blue) calls the level. RS (pink) reads the company name. Title and platinum then walk up. Call the stretch so Artcell does not open to an empty floor.",
+    summary: "Tandem: one full sponsor each. Blue is TN. Pink is RS. Say the level and the name in the same breath. Then the stretch.",
     cues: [
       {
         id: "sponsors-open",
         speaker: "RS",
         title: "Open the showcase",
         script:
-          "Dhaka Archive, thank you. Before Artcell walks out, we stop for the people who made this hall possible. If you sponsored this night, you are part of the band as far as we are concerned. Tanzim calls the level. I read the name.",
+          "Dhaka Archive, thank you. Before Artcell walks out, we stop for the people who made this hall possible. If you sponsored this night, you are part of the band as far as we are concerned. We take turns. Each of us says one sponsor — the level and the name.",
       },
       ...sponsorCues(),
       {
@@ -370,13 +362,13 @@ export const MC_CHAPTERS: McChapter[] = [
     clock: "10:15 PM",
     startMin: min(22, 15),
     endMin: min(23, 30),
-    summary: "Vote of thanks in tandem — TN calls the role, RS reads the names — then everyone on stage for the family photo.",
+    summary: "Vote of thanks in tandem — one full thank-you each, blue then pink — then everyone on stage for the family photo.",
     cues: [
       {
         id: "close-open",
         speaker: "TN",
         title: "Open the thanks",
-        script: "Before we let the lights win — thank you. I call the role. RS reads the name.",
+        script: "Before we let the lights win — thank you. We take turns. Each of us says one full thank-you.",
       },
       ...thanksCues(),
       {
