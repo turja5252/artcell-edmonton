@@ -316,15 +316,15 @@ export const MC_CHAPTERS: McChapter[] = [
     clock: "8:00 PM",
     startMin: min(20, 0),
     endMin: min(22, 15),
-    summary: "RS opens Artcell — short and tight. TN takes the underground shout, then the 9:00 stretch and 9:15 recall.",
+    summary: "RS opens Artcell for real — welcome the band, hold the room. TN takes the underground shout, then the 9:00 stretch and 9:15 recall.",
     cues: [
       {
         id: "artcell-open-rs",
         speaker: "RS",
         title: "Open Artcell",
         script:
-          "Edmonton — Artcell. Dhaka’s progressive metal. The band this room flew for. I am not going to tell you their Wikipedia. Tanzim — take it.",
-        note: "Short. Hand the mic. Do not start the shout.",
+          "Edmonton. Look at this room. You did not come out on a Sunday in September for a playlist. You came for Artcell. Dhaka’s progressive metal. The band that wrote Poth Chola, Dhushor Shomoy, Oniket Prantor, Dukkho Bilash — and then wrote a whole country’s night around those songs. For a lot of us those records were homework, heartbreak, and the long way home. Tonight they are not a YouTube tab. They are on this stage, in this city, with this crowd. Students. Families. People who have been waiting since the first time they heard Oniket Prantor in a bedroom in Bangladesh, or in a basement in Edmonton. This is the night. Give this band a welcome that sounds like we know who walked in. Tanzim — tell them how we used to call their name.",
+        note: "Take your time. Welcome the band. Leave the underground shout for TN.",
       },
       {
         id: "artcell-shout-tn",
