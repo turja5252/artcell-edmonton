@@ -87,7 +87,7 @@ function sponsorSlug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
-function spokenSponsor(row: SponsorRow): string {
+export function spokenSponsor(row: SponsorRow): string {
   if (!row.note || /employer/i.test(row.note)) return row.name;
   return `${row.name} — ${row.note}`;
 }
@@ -132,27 +132,31 @@ export function thanksCues(): McCue[] {
 }
 
 function sponsorCues(): McCue[] {
-  const speeches: Record<string, string> = {
-    "Spectrum Family Law": "Conan Taylor and Ayesha Siddiqua — come through.",
-    "Link Insurance Glenbrook": "Fardin Islam — come through.",
-    "3MT Property Ventures": "Give them a real Edmonton welcome.",
-  };
   const extraNotes: Record<string, string> = {
     "3MT Property Ventures": "No speaker name on the sheet. Confirm who walks up.",
   };
-  return SPONSORS.map((row, index) => {
+  const cues: McCue[] = [];
+  SPONSORS.forEach((row, index) => {
     const speaker = index % 2 === 0 ? "TN" : "RS";
-    const speech = speeches[row.name];
-    const extra = extraNotes[row.name];
-    const full = `${row.tier} sponsor, ${spokenSponsor(row)}.`;
-    return {
+    cues.push({
       id: `sponsors-${sponsorSlug(row.name)}`,
       speaker,
       title: `${row.tier} · ${row.name}`,
-      script: speech ? `${full} ${speech}` : full,
-      note: extra,
-    };
+      script: `${row.tier} sponsor, ${spokenSponsor(row)}. Please come on stage.`,
+      note: extraNotes[row.name],
+    });
+    if (row.name === "Spectrum Family Law") {
+      cues.push({
+        id: "sponsors-title-word",
+        speaker: "TN",
+        title: "Title sponsors — a quick word",
+        script:
+          "A quick word from our title sponsors, Spectrum Family Law — Ayesha’s team. Conan Taylor and Ayesha Siddiqua.",
+        note: "Hold the room for a short word. Then keep inviting the rest one by one.",
+      });
+    }
   });
+  return cues;
 }
 
 export const MC_CHAPTERS: McChapter[] = [
@@ -231,8 +235,8 @@ export const MC_CHAPTERS: McChapter[] = [
         speaker: "TN",
         title: "Why the sponsors matter",
         script:
-          "None of this room is an accident. These are Canadian businesses saying a Bangladeshi night belongs in this city. They did not just write a cheque. They stood behind the night. That is integration — not a speech about Canada. After Dhaka Archive we name them one by one. I take the blues. RS takes the pinks. Each of us says the full sponsor.",
-        note: "Do not read the list here. Full names are on the colored cues in Sponsor showcase.",
+          "None of this room is an accident. These are Canadian businesses saying a Bangladeshi night belongs in this city. They did not just write a cheque. They stood behind the night. That is integration — not a speech about Canada. After Dhaka Archive we bring them on stage one by one. I take the blues. RS takes the pinks. Title sponsors get a quick word.",
+        note: "Do not read the list here. Invites are on the colored cues at 7:30.",
       },
       {
         id: "outline-nick",
@@ -286,14 +290,14 @@ export const MC_CHAPTERS: McChapter[] = [
     clock: "7:30 PM",
     startMin: min(19, 30),
     endMin: min(20, 0),
-    summary: "Tandem: one full sponsor each. Blue is TN. Pink is RS. Say the level and the name in the same breath. Then the stretch.",
+    summary: "Invite sponsors onto the stage one by one. Full name each turn. Title sponsors take a quick word. Then the stretch.",
     cues: [
       {
         id: "sponsors-open",
         speaker: "RS",
         title: "Open the showcase",
         script:
-          "Dhaka Archive, thank you. Before Artcell walks out, we stop for the people who made this hall possible. If you sponsored this night, you are part of the band as far as we are concerned. We take turns. Each of us says one sponsor — the level and the name.",
+          "Dhaka Archive, thank you. Before Artcell walks out, we bring the people who built this room onto the stage — one by one. We take turns. Each of us says one sponsor, the level and the name, and we invite them up. Title sponsors will take a quick word.",
       },
       ...sponsorCues(),
       {
