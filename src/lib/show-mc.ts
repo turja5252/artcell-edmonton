@@ -277,21 +277,30 @@ export const MC_CHAPTERS: McChapter[] = [
     clock: "8:00 PM",
     startMin: min(20, 0),
     endMin: min(22, 15),
-    summary: "Short underground story. Four songs as bloodline, not a Wikipedia page. Bring them out. Hold the 9:00 stretch and the 9:15 recall.",
+    summary: "RS opens Artcell — short and tight. TN takes the underground shout, then the 9:00 stretch and 9:15 recall.",
     cues: [
       {
-        id: "artcell-story",
-        speaker: "TN",
-        title: "The underground, short",
+        id: "artcell-open-rs",
+        speaker: "RS",
+        title: "Open Artcell",
         script:
-          "Before the posters, they were an underground band that wrote the map. Poth Chola. Dhushor Shomoy. Oniket Prantor. Dukkho Bilash. That is the bloodline. That is why this room is full.",
+          "Edmonton — Artcell. Dhaka’s progressive metal. The band this room flew for. I am not going to tell you their Wikipedia. Tanzim — take it.",
+        note: "Short. Hand the mic. Do not start the shout.",
+      },
+      {
+        id: "artcell-shout-tn",
+        speaker: "TN",
+        title: "Underground shout",
+        script:
+          "Listen to me. This did not start on a festival poster. This started underground. Mid-2000s. Artcell came up out of that scene — Poth Chola, Dhushor Shomoy, Oniket Prantor, Dukkho Bilash — and they did not stay in the basement. They walked into the mainstream. And here is the part this city needs to feel: even at the big mainstream concerts, when another band was on stage, the crowd was not calling that band’s name. The crowd was encoreing Artcell. ARTCELL. ARTCELL. ARTCELL. Making mainstream bands sing Artcell songs. That is not a fan club. That is a country changing the setlist. Edmonton — if they had to hear that chant in Dhaka, they are going to hear it louder here. I need this room. On three. One. Two.",
+        note: "Not short. Build it. Hold the last line and make them shout.",
       },
       {
         id: "artcell-encore",
         speaker: "TN",
         title: "Bring Artcell out",
         script:
-          "Edmonton — this is the encore they flew for. I need this room louder than the amps. Artcell. Come on.",
+          "ARTCELL. ARTCELL. ARTCELL. Come on.",
       },
       {
         id: "artcell-break",
