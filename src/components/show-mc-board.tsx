@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Check, Clock3, RotateCcw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useShowNow } from "@/components/show-clock";
 import {
   MC_CHAPTERS,
   SPONSOR_SPEECHES,
@@ -11,8 +12,8 @@ import {
   THANKS,
   chapterAtMinute,
   cueMatchesSpeaker,
-  formatEdmontonClock,
   minutesInZone,
+  showClockState,
   speakerLabel,
   type McChapter,
   type McSpeaker,
@@ -37,8 +38,8 @@ function writeDone(ids: string[]) {
   window.localStorage.setItem(DONE_KEY, JSON.stringify(ids));
 }
 
-export function ShowMcBoard({ me }: { me: string }) {
-  const [now, setNow] = useState(() => new Date());
+export function ShowMcBoard({ me, concertDate }: { me: string; concertDate?: string }) {
+  const now = useShowNow();
   const [filter, setFilter] = useState<SpeakerFilter>("all");
   const [focusId, setFocusId] = useState<string | null>(null);
   const [done, setDone] = useState<string[]>([]);
@@ -47,13 +48,12 @@ export function ShowMcBoard({ me }: { me: string }) {
   useEffect(() => {
     setDone(readDone());
     setHydrated(true);
-    const tick = window.setInterval(() => setNow(new Date()), 15000);
-    return () => window.clearInterval(tick);
   }, []);
 
-  const minute = minutesInZone(now);
+  const liveNow = now ?? new Date(0);
+  const minute = minutesInZone(liveNow);
   const live = chapterAtMinute(minute);
-  const clock = formatEdmontonClock(now);
+  const timer = showClockState(liveNow, concertDate);
   const iAmTn = /tanzim/i.test(me);
 
   const chapters = useMemo(() => {
@@ -85,18 +85,22 @@ export function ShowMcBoard({ me }: { me: string }) {
   return (
     <div className="space-y-4 pb-24">
       <div className="rounded-2xl border border-primary/30 bg-primary/10 p-4">
-        <p className="text-[11px] tracking-wide text-primary uppercase">Show MC · Edmonton time</p>
-        <div className="mt-1 flex items-end justify-between gap-3">
-          <p className="font-heading text-3xl leading-none tabular-nums text-primary">{clock}</p>
-          <p className="text-sm font-medium text-primary">
-            On now · Ch {live.number} {live.title}
-          </p>
-        </div>
+        <p className="text-[11px] tracking-wide text-primary uppercase">Show MC</p>
+        <p className="font-heading mt-1 text-2xl leading-none">
+          Ch {live.number} {live.title}
+        </p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {timer.phase === "live"
+            ? `${timer.headline} left in this block`
+            : timer.phase === "after"
+              ? "Night is closed"
+              : `${timer.headline} until this chapter`}
+        </p>
         <p className="mt-2 text-sm text-muted-foreground">
           <span className="font-semibold text-sky-300">Blue is TN</span>
           {iAmTn ? " (you)" : " · Tanzim"}
           . <span className="font-semibold text-pink-300">Pink is RS</span>
-          . Together cues stay neutral.
+          . Together cues stay neutral. Clock and timer stay on the dash.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           <Button

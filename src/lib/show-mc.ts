@@ -1,3 +1,5 @@
+import { daysUntilConcert, normalizeConcertDate } from "@/lib/concert-date";
+
 export type McSpeaker = "TN" | "RS" | "BOTH";
 
 export type McCue = {
@@ -320,24 +322,47 @@ export const MC_CHAPTERS: McChapter[] = [
   },
 ];
 
-export function minutesInZone(now = new Date(), timeZone = MC_TIMEZONE): number {
+function zoneParts(now: Date, timeZone = MC_TIMEZONE) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone,
     hour: "numeric",
     minute: "numeric",
+    second: "numeric",
     hourCycle: "h23",
   }).formatToParts(now);
-  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? 0);
-  const minute = Number(parts.find((part) => part.type === "minute")?.value ?? 0);
+  const read = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value ?? 0);
+  return { hour: read("hour"), minute: read("minute"), second: read("second") };
+}
+
+export function minutesInZone(now = new Date(), timeZone = MC_TIMEZONE): number {
+  const { hour, minute } = zoneParts(now, timeZone);
   return hour * 60 + minute;
 }
 
-export function formatEdmontonClock(now = new Date()): string {
+export function secondsInZone(now = new Date(), timeZone = MC_TIMEZONE): number {
+  const { hour, minute, second } = zoneParts(now, timeZone);
+  return hour * 3600 + minute * 60 + second;
+}
+
+export function formatEdmontonClock(now = new Date(), withSeconds = false): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: MC_TIMEZONE,
     hour: "numeric",
     minute: "2-digit",
+    second: withSeconds ? "2-digit" : undefined,
   }).format(now);
+}
+
+export function formatShowDuration(totalSeconds: number): string {
+  const safe = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
+  const seconds = safe % 60;
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
 export function chapterAtMinute(minute: number): McChapter {
@@ -345,6 +370,173 @@ export function chapterAtMinute(minute: number): McChapter {
   if (current) return current;
   if (minute < MC_CHAPTERS[0].startMin) return MC_CHAPTERS[0];
   return MC_CHAPTERS[MC_CHAPTERS.length - 1];
+}
+
+export function chapterAtSecond(second: number): McChapter | null {
+  return (
+    MC_CHAPTERS.find(
+      (chapter) => second >= chapter.startMin * 60 && second < chapter.endMin * 60
+    ) ?? null
+  );
+}
+
+export type ShowClockState = {
+  clock: string;
+  headline: string;
+  detail: string;
+  remainingSec: number | null;
+  progress: number | null;
+  chapter: McChapter | null;
+  next: McChapter | null;
+  phase: "before" | "live" | "after";
+};
+
+function tzOffsetMs(date: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const read = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value ?? 0);
+  const asUtc = Date.UTC(
+    read("year"),
+    read("month") - 1,
+    read("day"),
+    read("hour"),
+    read("minute"),
+    read("second")
+  );
+  return asUtc - date.getTime();
+}
+
+/** UTC ms for a civil wall time in America/Edmonton. */
+export function zonedCivilTimeMs(
+  isoDate: string,
+  hour: number,
+  minute = 0,
+  second = 0,
+  timeZone = MC_TIMEZONE
+): number {
+  const date = normalizeConcertDate(isoDate);
+  const utcGuess = Date.UTC(
+    Number(date.slice(0, 4)),
+    Number(date.slice(5, 7)) - 1,
+    Number(date.slice(8, 10)),
+    hour,
+    minute,
+    second
+  );
+  const adjusted = utcGuess - tzOffsetMs(new Date(utcGuess), timeZone);
+  return utcGuess - tzOffsetMs(new Date(adjusted), timeZone);
+}
+
+export function showClockState(now = new Date(), concertDate?: string): ShowClockState {
+  const clock = formatEdmontonClock(now, true);
+  const days = concertDate ? daysUntilConcert(concertDate, now, MC_TIMEZONE) : 0;
+
+  if (days > 0) {
+    const openingMin = MC_CHAPTERS[0].startMin;
+    const opening = zonedCivilTimeMs(
+      concertDate!,
+      Math.floor(openingMin / 60),
+      openingMin % 60
+    );
+    const remainingSec = Math.max(0, Math.floor((opening - now.getTime()) / 1000));
+    return {
+      clock,
+      headline: formatShowDuration(remainingSec),
+      detail: `Until ${MC_CHAPTERS[0].clock} opening`,
+      remainingSec,
+      progress: null,
+      chapter: null,
+      next: MC_CHAPTERS[0],
+      phase: "before",
+    };
+  }
+
+  if (days < 0) {
+    return {
+      clock,
+      headline: "Closed",
+      detail: "Show night is over",
+      remainingSec: null,
+      progress: 1,
+      chapter: MC_CHAPTERS[MC_CHAPTERS.length - 1],
+      next: null,
+      phase: "after",
+    };
+  }
+
+  const second = secondsInZone(now);
+  const first = MC_CHAPTERS[0];
+  const last = MC_CHAPTERS[MC_CHAPTERS.length - 1];
+  const live = chapterAtSecond(second);
+
+  if (second < first.startMin * 60) {
+    const remainingSec = first.startMin * 60 - second;
+    return {
+      clock,
+      headline: formatShowDuration(remainingSec),
+      detail: `Until ${first.clock} ${first.title}`,
+      remainingSec,
+      progress: null,
+      chapter: null,
+      next: first,
+      phase: "before",
+    };
+  }
+
+  if (live) {
+    const remainingSec = live.endMin * 60 - second;
+    const span = Math.max(1, (live.endMin - live.startMin) * 60);
+    const elapsed = second - live.startMin * 60;
+    const index = MC_CHAPTERS.findIndex((chapter) => chapter.id === live.id);
+    const next = MC_CHAPTERS[index + 1] ?? null;
+    return {
+      clock,
+      headline: formatShowDuration(remainingSec),
+      detail: next
+        ? `${live.title} · next ${next.clock} ${next.title}`
+        : `${live.title} · last block`,
+      remainingSec,
+      progress: Math.min(1, Math.max(0, elapsed / span)),
+      chapter: live,
+      next,
+      phase: "live",
+    };
+  }
+
+  if (second >= last.endMin * 60) {
+    return {
+      clock,
+      headline: "Closed",
+      detail: "Thanks and family photo",
+      remainingSec: null,
+      progress: 1,
+      chapter: last,
+      next: null,
+      phase: "after",
+    };
+  }
+
+  const next = MC_CHAPTERS.find((chapter) => second < chapter.startMin * 60) ?? last;
+  const remainingSec = Math.max(0, next.startMin * 60 - second);
+  return {
+    clock,
+    headline: formatShowDuration(remainingSec),
+    detail: `Until ${next.clock} ${next.title}`,
+    remainingSec,
+    progress: null,
+    chapter: null,
+    next,
+    phase: "before",
+  };
 }
 
 export function speakerLabel(speaker: McSpeaker): string {

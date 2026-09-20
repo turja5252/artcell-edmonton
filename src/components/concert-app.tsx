@@ -40,6 +40,7 @@ import { TicketsEditor } from "@/components/tickets-editor";
 import { ShowMcBoard } from "@/components/show-mc-board";
 import { TeamBoard } from "@/components/team-board";
 import { ConcertCountdown } from "@/components/concert-countdown";
+import { ShowClock } from "@/components/show-clock";
 import { DeliverablesBoard } from "@/components/deliverables-board";
 import { TicketQr } from "@/components/ticket-qr";
 import { WhoAmI } from "@/components/who-am-i";
@@ -1035,6 +1036,13 @@ export function ConcertApp({
             </Button>
           </div>
         </div>
+        <div className="w-full">
+          <ShowClock
+            concertDate={settings.concertDate}
+            compact
+            onOpenMc={tab === "show-mc" ? undefined : () => setTab("show-mc")}
+          />
+        </div>
       </header>
 
       <button
@@ -1257,7 +1265,7 @@ export function ConcertApp({
 
       {tab === "show-mc" && (
         <section className="mt-5 flex-1">
-          <ShowMcBoard me={me} />
+          <ShowMcBoard me={me} concertDate={settings.concertDate} />
         </section>
       )}
 

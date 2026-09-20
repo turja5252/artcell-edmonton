@@ -5,6 +5,7 @@ GitHub: [turja5252/artcell-edmonton](https://github.com/turja5252/artcell-edmont
 
 ## Phone board
 
+- **Clock** — live Edmonton time plus a timer (until opening, or time left in the current MC block). Tap it to open Show MC.
 - **MC** — Show MC run-of-show for Tanzim (TN) and RS: chapter cues, speakable scripts (including Dhaka Archive Bangla), sponsor glance list, and thanks. Ticks stay on the phone.
 - **Calls** — claim a company, mark done, leave what happened, upload/download sponsor photos & PDFs (videos go on Media)
 - **Money** — target, pledged, received
