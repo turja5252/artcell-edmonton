@@ -15,7 +15,6 @@ import {
   minutesInZone,
   showClockState,
   speakerLabel,
-  sponsorVoice,
   type McChapter,
   type McSpeaker,
 } from "@/lib/show-mc";
@@ -101,7 +100,7 @@ export function ShowMcBoard({ me, concertDate }: { me: string; concertDate?: str
           <span className="font-semibold text-sky-300">Blue is TN</span>
           {iAmTn ? " (you)" : " · Tanzim"}
           . <span className="font-semibold text-pink-300">Pink is RS</span>
-          . Sponsor names ping-pong — you say the blues, RS says the pinks.
+          . You call the level in blue. RS reads every sponsor name in pink.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           <Button
@@ -286,9 +285,32 @@ function ChapterCard({
                     {cue.scriptBn}
                   </p>
                 ) : null}
-                <p className={cn("mt-3 text-base leading-relaxed", speakerText(cue.speaker))}>
-                  {cue.script}
-                </p>
+                {cue.lines?.length ? (
+                  <ul className="mt-3 space-y-2">
+                    {cue.lines.map((line, index) => (
+                      <li
+                        key={`${cue.id}-${line.speaker}-${index}`}
+                        className={cn("rounded-xl px-3 py-2", speakerFrame(line.speaker))}
+                      >
+                        <span className={speakerPill(line.speaker)}>{speakerLabel(line.speaker)}</span>
+                        <p
+                          className={cn(
+                            "mt-1 leading-snug",
+                            line.speaker === "RS"
+                              ? "text-xl font-semibold text-pink-50"
+                              : "text-base text-sky-100"
+                          )}
+                        >
+                          {line.text}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                ) : cue.script ? (
+                  <p className={cn("mt-3 text-base leading-relaxed", speakerText(cue.speaker))}>
+                    {cue.script}
+                  </p>
+                ) : null}
                 {cue.note ? (
                   <p className="mt-2 text-xs text-muted-foreground">{cue.note}</p>
                 ) : null}
@@ -307,7 +329,7 @@ function SponsorCard() {
       <p className="text-[11px] tracking-wide text-primary uppercase">Glance list</p>
       <h2 className="font-heading mt-1 text-2xl leading-none">Sponsors and thanks</h2>
       <p className="mt-2 text-sm text-muted-foreground">
-        Same colors as the cues. Blue is TN. Pink is RS. Say them in tandem.
+        RS reads the pink name. TN hits the blue level first.
       </p>
 
       <h3 className="mt-4 text-sm font-semibold">Who walks up</h3>
@@ -320,23 +342,22 @@ function SponsorCard() {
         ))}
       </ul>
 
-      <h3 className="mt-4 text-sm font-semibold">Tandem board</h3>
+      <h3 className="mt-4 text-sm font-semibold">RS name sheet</h3>
       <ul className="mt-2 space-y-2">
-        {SPONSORS.map((row, index) => {
-          const speaker = sponsorVoice(index);
-          return (
-            <li
-              key={`${row.tier}-${row.name}`}
-              className={cn("rounded-xl px-3 py-2 text-sm", speakerFrame(speaker))}
-            >
-              <span className={speakerPill(speaker)}>{speakerLabel(speaker)}</span>
-              <span className={cn("mt-1 block font-medium", speakerText(speaker))}>
-                {row.tier} · {row.name}
-                {row.note ? ` — ${row.note}` : ""}
+        {SPONSORS.map((row) => (
+          <li key={`${row.tier}-${row.name}`} className="rounded-xl border border-border/60 p-2">
+            <p className={cn("rounded-lg px-3 py-1.5 text-sm", speakerFrame("TN"))}>
+              <span className={speakerPill("TN")}>TN</span>
+              <span className={cn("ml-2", speakerText("TN"))}>{row.tier} sponsor</span>
+            </p>
+            <p className={cn("mt-1 rounded-lg px-3 py-2", speakerFrame("RS"))}>
+              <span className={speakerPill("RS")}>RS</span>
+              <span className="mt-1 block text-lg font-semibold leading-snug text-pink-50">
+                {row.name}
               </span>
-            </li>
-          );
-        })}
+            </p>
+          </li>
+        ))}
       </ul>
 
       <h3 className="mt-4 text-sm font-semibold">10:15 names</h3>

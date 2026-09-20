@@ -88,12 +88,8 @@ function sponsorSlug(name: string): string {
 }
 
 function spokenSponsor(row: SponsorRow): string {
-  return row.note ? `${row.name} — ${row.note}` : row.name;
-}
-
-/** Alternate voices down the board: even = TN (blue), odd = RS (pink). */
-export function sponsorVoice(index: number): Exclude<McSpeaker, "BOTH"> {
-  return index % 2 === 0 ? "TN" : "RS";
+  if (!row.note || /employer/i.test(row.note)) return row.name;
+  return `${row.name} — ${row.note}`;
 }
 
 function sponsorCues(): McCue[] {
@@ -105,19 +101,21 @@ function sponsorCues(): McCue[] {
   const extraNotes: Record<string, string> = {
     "3MT Property Ventures": "No speaker name on the sheet. Confirm who walks up.",
   };
-  return SPONSORS.map((row, index) => {
-    const speaker = sponsorVoice(index);
+  return SPONSORS.map((row) => {
     const speech = speeches[row.name];
-    const partner = speaker === "TN" ? "RS" : "TN";
     const extra = extraNotes[row.name];
+    const lines: McLine[] = [
+      { speaker: "TN", text: `${row.tier} sponsor.` },
+      { speaker: "RS", text: `${spokenSponsor(row)}.` },
+    ];
+    if (speech) lines.push({ speaker: "TN", text: speech });
     return {
       id: `sponsors-${sponsorSlug(row.name)}`,
-      speaker,
-      title: `${row.tier} · ${row.name}`,
-      script: speech ? `${spokenSponsor(row)}. ${speech}` : `${spokenSponsor(row)}.`,
-      note: extra
-        ? `${extra} In tandem with ${partner}.`
-        : `In tandem with ${partner}. ${speaker} takes this name.`,
+      speaker: "BOTH",
+      title: row.name,
+      script: "",
+      lines,
+      note: extra,
     };
   });
 }
@@ -198,8 +196,8 @@ export const MC_CHAPTERS: McChapter[] = [
         speaker: "TN",
         title: "Why the sponsors matter",
         script:
-          "None of this room is an accident. These are Canadian businesses saying a Bangladeshi night belongs in this city. They did not just write a cheque. They stood behind the night. That is integration — not a speech about Canada. We name them after Dhaka Archive. Blue names are mine. Pink names are RS. We go in tandem.",
-        note: "Do not read the list here. The colored names are in Sponsor showcase.",
+          "None of this room is an accident. These are Canadian businesses saying a Bangladeshi night belongs in this city. They did not just write a cheque. They stood behind the night. That is integration — not a speech about Canada. After Dhaka Archive, I call the level. RS reads every name.",
+        note: "Do not read the list here. Names are on RS’s pink lines in Sponsor showcase.",
       },
       {
         id: "outline-nick",
@@ -253,14 +251,14 @@ export const MC_CHAPTERS: McChapter[] = [
     clock: "7:30 PM",
     startMin: min(19, 30),
     endMin: min(20, 0),
-    summary: "Ping-pong the board. Blue names are TN. Pink names are RS. Title and platinum then speak. Call the stretch so Artcell does not open to an empty floor.",
+    summary: "Tandem: TN (blue) calls the level. RS (pink) reads the company name. Title and platinum then walk up. Call the stretch so Artcell does not open to an empty floor.",
     cues: [
       {
         id: "sponsors-open",
         speaker: "RS",
         title: "Open the showcase",
         script:
-          "Dhaka Archive, thank you. Before Artcell walks out, we stop for the people who made this hall possible. If you sponsored this night, you are part of the band as far as we are concerned. Tanzim — take the blues. I’ll take the pinks.",
+          "Dhaka Archive, thank you. Before Artcell walks out, we stop for the people who made this hall possible. If you sponsored this night, you are part of the band as far as we are concerned. Tanzim calls the level. I read the name.",
       },
       ...sponsorCues(),
       {
@@ -565,6 +563,7 @@ export function speakerLabel(speaker: McSpeaker): string {
 
 export function cueMatchesSpeaker(cue: McCue, filter: "all" | McSpeaker): boolean {
   if (filter === "all") return true;
+  if (cue.lines?.some((line) => line.speaker === filter)) return true;
   if (cue.speaker === "BOTH") return true;
   return cue.speaker === filter;
 }
