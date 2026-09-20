@@ -2,6 +2,11 @@ import { daysUntilConcert, normalizeConcertDate } from "@/lib/concert-date";
 
 export type McSpeaker = "TN" | "RS" | "BOTH";
 
+export type McLine = {
+  speaker: Exclude<McSpeaker, "BOTH">;
+  text: string;
+};
+
 export type McCue = {
   id: string;
   speaker: McSpeaker;
@@ -9,6 +14,8 @@ export type McCue = {
   script: string;
   scriptBn?: string;
   note?: string;
+  /** Two-color tandem lines — pink RS / blue TN on the same cue. */
+  lines?: McLine[];
 };
 
 export type McChapter = {
@@ -74,6 +81,45 @@ export const THANKS = {
 
 function min(hour: number, minute = 0): number {
   return hour * 60 + minute;
+}
+
+function sponsorSlug(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+function spokenSponsor(row: SponsorRow): string {
+  return row.note ? `${row.name} — ${row.note}` : row.name;
+}
+
+/** Alternate voices down the board: even = TN (blue), odd = RS (pink). */
+export function sponsorVoice(index: number): Exclude<McSpeaker, "BOTH"> {
+  return index % 2 === 0 ? "TN" : "RS";
+}
+
+function sponsorCues(): McCue[] {
+  const speeches: Record<string, string> = {
+    "Spectrum Family Law": "Conan Taylor and Ayesha Siddiqua — come through.",
+    "Link Insurance Glenbrook": "Fardin Islam — come through.",
+    "3MT Property Ventures": "Give them a real Edmonton welcome.",
+  };
+  const extraNotes: Record<string, string> = {
+    "3MT Property Ventures": "No speaker name on the sheet. Confirm who walks up.",
+  };
+  return SPONSORS.map((row, index) => {
+    const speaker = sponsorVoice(index);
+    const speech = speeches[row.name];
+    const partner = speaker === "TN" ? "RS" : "TN";
+    const extra = extraNotes[row.name];
+    return {
+      id: `sponsors-${sponsorSlug(row.name)}`,
+      speaker,
+      title: `${row.tier} · ${row.name}`,
+      script: speech ? `${spokenSponsor(row)}. ${speech}` : `${spokenSponsor(row)}.`,
+      note: extra
+        ? `${extra} In tandem with ${partner}.`
+        : `In tandem with ${partner}. ${speaker} takes this name.`,
+    };
+  });
 }
 
 export const MC_CHAPTERS: McChapter[] = [
@@ -152,8 +198,8 @@ export const MC_CHAPTERS: McChapter[] = [
         speaker: "TN",
         title: "Why the sponsors matter",
         script:
-          "None of this room is an accident. These are Canadian businesses saying a Bangladeshi night belongs in this city. Spectrum Family Law — Ayesha’s team — title sponsor. They did not just write a cheque. They stood behind the night. Platinum: Link Insurance Glenbrook, and 3MT Property Ventures. Silver: Swodeshi Immigration, Elite Integrity Service, KETEK, Mahbub Mollah. Bronze: Mohsin Alam, Top Donair and Poutine, Daily Bazar. DEXCEL MEDIA on the digital side. Imran Kabir on the lens. BCCB carrying community. Great Canadian Butcher in this city’s kitchen. That is integration. Not a speech about Canada — a room full of people who said yes.",
-        note: "Glance the list. Do not recite it like a spreadsheet.",
+          "None of this room is an accident. These are Canadian businesses saying a Bangladeshi night belongs in this city. They did not just write a cheque. They stood behind the night. That is integration — not a speech about Canada. We name them after Dhaka Archive. Blue names are mine. Pink names are RS. We go in tandem.",
+        note: "Do not read the list here. The colored names are in Sponsor showcase.",
       },
       {
         id: "outline-nick",
@@ -207,44 +253,16 @@ export const MC_CHAPTERS: McChapter[] = [
     clock: "7:30 PM",
     startMin: min(19, 30),
     endMin: min(20, 0),
-    summary: "Thank the room that paid for the night. Title and platinum speak. Then call the stretch — Artcell’s opening cannot start to an empty floor.",
+    summary: "Ping-pong the board. Blue names are TN. Pink names are RS. Title and platinum then speak. Call the stretch so Artcell does not open to an empty floor.",
     cues: [
       {
         id: "sponsors-open",
         speaker: "RS",
         title: "Open the showcase",
         script:
-          "Dhaka Archive, thank you. Before Artcell walks out, we stop for the people who made this hall possible. If you sponsored this night, you are part of the band as far as we are concerned.",
+          "Dhaka Archive, thank you. Before Artcell walks out, we stop for the people who made this hall possible. If you sponsored this night, you are part of the band as far as we are concerned. Tanzim — take the blues. I’ll take the pinks.",
       },
-      {
-        id: "sponsors-title",
-        speaker: "TN",
-        title: "Title — Spectrum Family Law",
-        script:
-          "Our title sponsor, Spectrum Family Law — Ayesha’s team. Please welcome Conan Taylor and Ayesha Siddiqua.",
-      },
-      {
-        id: "sponsors-link",
-        speaker: "TN",
-        title: "Platinum — Link Insurance",
-        script:
-          "Platinum sponsor, Link Insurance Glenbrook. Fardin Islam — come through.",
-      },
-      {
-        id: "sponsors-3mt",
-        speaker: "TN",
-        title: "Platinum — 3MT",
-        script:
-          "Platinum sponsor, 3MT Property Ventures. Give them a real Edmonton welcome.",
-        note: "No speaker name on the sheet. Confirm who walks up before you say it.",
-      },
-      {
-        id: "sponsors-rest",
-        speaker: "TN",
-        title: "The rest of the family",
-        script:
-          "Silver: Swodeshi Immigration Service. Elite Integrity Service. KETEK. Mahbub Mollah. Bronze: Mohsin Alam. Top Donair and Poutine. Daily Bazar. Digital: DEXCEL MEDIA. On the lens: Imran Kabir Photography. Promotional partner: BCCB. Community support: Great Canadian Butcher. This city said yes. Keep that with you.",
-      },
+      ...sponsorCues(),
       {
         id: "sponsors-recall",
         speaker: "TN",

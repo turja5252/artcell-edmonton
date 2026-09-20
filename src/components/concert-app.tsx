@@ -999,52 +999,64 @@ export function ConcertApp({
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col px-4 pb-32 sm:px-6">
       <header className="sticky top-0 z-20 -mx-4 flex flex-wrap items-start justify-between gap-3 border-b border-border/50 bg-background/90 px-4 pt-[max(1.25rem,env(safe-area-inset-top))] pb-3 backdrop-blur-md sm:-mx-6 sm:px-6">
-        <div
-          className="min-w-0 flex-1 select-none"
-          onClick={onBrandActivate}
-        >
-          <p className="text-[11px] font-medium tracking-[0.22em] text-primary uppercase">
-            Edmonton show
-          </p>
-          <h1 className="font-heading text-4xl leading-none tracking-wide sm:text-5xl">
-            Artcell
-          </h1>
-          <ConcertCountdown concertDate={settings.concertDate} />
-        </div>
-        <div className="flex shrink-0 items-start gap-2">
-          <TicketQr url={settings.ticketUrl} variant="compact" />
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon-lg"
-              className="size-11"
-              render={<a href="/Artcell-Edmonton-Show.xlsx" download />}
-              aria-label="Download Excel for Microsoft 365"
-            >
-              <FileSpreadsheet />
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon-lg"
-              className="size-11"
-              onClick={() => void shareBoard()}
-              aria-label="Share this board"
-            >
-              <Share2 />
-            </Button>
+        {tab === "show-mc" ? (
+          <div className="w-full space-y-3">
+            <p className="text-[11px] font-medium tracking-[0.22em] text-primary uppercase">
+              Show MC · game day
+            </p>
+            <ShowClock concertDate={settings.concertDate} compact />
           </div>
-        </div>
-        <div className="w-full">
-          <ShowClock
-            concertDate={settings.concertDate}
-            compact
-            onOpenMc={tab === "show-mc" ? undefined : () => setTab("show-mc")}
-          />
-        </div>
+        ) : (
+          <>
+            <div
+              className="min-w-0 flex-1 select-none"
+              onClick={onBrandActivate}
+            >
+              <p className="text-[11px] font-medium tracking-[0.22em] text-primary uppercase">
+                Edmonton show
+              </p>
+              <h1 className="font-heading text-4xl leading-none tracking-wide sm:text-5xl">
+                Artcell
+              </h1>
+              <ConcertCountdown concertDate={settings.concertDate} />
+            </div>
+            <div className="flex shrink-0 items-start gap-2">
+              <TicketQr url={settings.ticketUrl} variant="compact" />
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-lg"
+                  className="size-11"
+                  render={<a href="/Artcell-Edmonton-Show.xlsx" download />}
+                  aria-label="Download Excel for Microsoft 365"
+                >
+                  <FileSpreadsheet />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-lg"
+                  className="size-11"
+                  onClick={() => void shareBoard()}
+                  aria-label="Share this board"
+                >
+                  <Share2 />
+                </Button>
+              </div>
+            </div>
+            <div className="w-full">
+              <ShowClock
+                concertDate={settings.concertDate}
+                compact
+                onOpenMc={() => setTab("show-mc")}
+              />
+            </div>
+          </>
+        )}
       </header>
 
+      {tab !== "show-mc" ? (
       <button
         type="button"
         onClick={() => setWhoOpen(true)}
@@ -1083,6 +1095,7 @@ export function ConcertApp({
           </span>
         )}
       </button>
+      ) : null}
 
       {tab === "outreach" ? (
         <div className="mt-4 grid grid-cols-3 gap-2">

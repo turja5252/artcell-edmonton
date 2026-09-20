@@ -15,6 +15,7 @@ import {
   minutesInZone,
   showClockState,
   speakerLabel,
+  sponsorVoice,
   type McChapter,
   type McSpeaker,
 } from "@/lib/show-mc";
@@ -100,7 +101,7 @@ export function ShowMcBoard({ me, concertDate }: { me: string; concertDate?: str
           <span className="font-semibold text-sky-300">Blue is TN</span>
           {iAmTn ? " (you)" : " · Tanzim"}
           . <span className="font-semibold text-pink-300">Pink is RS</span>
-          . Together cues stay neutral. Clock and timer stay on the dash.
+          . Sponsor names ping-pong — you say the blues, RS says the pinks.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           <Button
@@ -306,10 +307,10 @@ function SponsorCard() {
       <p className="text-[11px] tracking-wide text-primary uppercase">Glance list</p>
       <h2 className="font-heading mt-1 text-2xl leading-none">Sponsors and thanks</h2>
       <p className="mt-2 text-sm text-muted-foreground">
-        Use this if you lose the thread. Speeches first, then the full board, then the close list.
+        Same colors as the cues. Blue is TN. Pink is RS. Say them in tandem.
       </p>
 
-      <h3 className="mt-4 text-sm font-semibold">Who speaks</h3>
+      <h3 className="mt-4 text-sm font-semibold">Who walks up</h3>
       <ul className="mt-2 space-y-2">
         {SPONSOR_SPEECHES.map((row) => (
           <li key={row.company} className="rounded-xl bg-background/50 px-3 py-2 text-sm">
@@ -319,17 +320,23 @@ function SponsorCard() {
         ))}
       </ul>
 
-      <h3 className="mt-4 text-sm font-semibold">Full board</h3>
-      <ul className="mt-2 divide-y divide-border/60">
-        {SPONSORS.map((row) => (
-          <li key={`${row.tier}-${row.name}`} className="flex items-start justify-between gap-3 py-2 text-sm">
-            <span>{row.name}</span>
-            <span className="shrink-0 text-xs text-muted-foreground">
-              {row.tier}
-              {row.note ? ` · ${row.note}` : ""}
-            </span>
-          </li>
-        ))}
+      <h3 className="mt-4 text-sm font-semibold">Tandem board</h3>
+      <ul className="mt-2 space-y-2">
+        {SPONSORS.map((row, index) => {
+          const speaker = sponsorVoice(index);
+          return (
+            <li
+              key={`${row.tier}-${row.name}`}
+              className={cn("rounded-xl px-3 py-2 text-sm", speakerFrame(speaker))}
+            >
+              <span className={speakerPill(speaker)}>{speakerLabel(speaker)}</span>
+              <span className={cn("mt-1 block font-medium", speakerText(speaker))}>
+                {row.tier} · {row.name}
+                {row.note ? ` — ${row.note}` : ""}
+              </span>
+            </li>
+          );
+        })}
       </ul>
 
       <h3 className="mt-4 text-sm font-semibold">10:15 names</h3>
