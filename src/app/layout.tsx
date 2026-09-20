@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Oswald } from "next/font/google";
+import { Geist, Noto_Sans_Bengali, Oswald } from "next/font/google";
 
 import { PwaBoot } from "@/components/pwa-boot";
 
@@ -14,6 +14,12 @@ const oswald = Oswald({
   variable: "--font-display",
   subsets: ["latin"],
   weight: ["500", "600"],
+});
+
+const notoBengali = Noto_Sans_Bengali({
+  variable: "--font-noto-bengali",
+  subsets: ["bengali"],
+  weight: ["400", "600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -52,7 +58,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${oswald.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${oswald.variable} ${notoBengali.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col font-sans">
         {children}

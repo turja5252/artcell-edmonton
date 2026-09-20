@@ -10,6 +10,7 @@
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  --font-bengali: var(--font-noto-bengali), "Noto Sans Bengali", ui-sans-serif, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -103,6 +104,10 @@
 @utility tap {
   min-height: 3rem;
   touch-action: manipulation;
+}
+
+@utility font-bengali {
+  font-family: var(--font-bengali);
 }
 
 /* Unmistakable sponsor-card glows on dark phones. Outline + multi-layer

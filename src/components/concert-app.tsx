@@ -16,6 +16,7 @@ import {
   FileSpreadsheet,
   Handshake,
   ImageIcon,
+  Mic,
   Plus,
   Search,
   Share2,
@@ -36,6 +37,7 @@ import { MediaBoard } from "@/components/media-board";
 import { uploadMediaFiles } from "@/lib/media-client-upload";
 import { TargetEditor } from "@/components/target-editor";
 import { TicketsEditor } from "@/components/tickets-editor";
+import { ShowMcBoard } from "@/components/show-mc-board";
 import { TeamBoard } from "@/components/team-board";
 import { ConcertCountdown } from "@/components/concert-countdown";
 import { DeliverablesBoard } from "@/components/deliverables-board";
@@ -102,7 +104,7 @@ function writeMe(name: string) {
   window.dispatchEvent(new Event(ME_EVENT));
 }
 
-type Tab = "outreach" | "money" | "seats" | "team" | "deliverables" | "media";
+type Tab = "show-mc" | "outreach" | "money" | "seats" | "team" | "deliverables" | "media";
 type Filter = "mine" | "open" | "unassigned" | "done" | "all";
 
 function matches(lead: Lead, query: string, filter: Filter, me: string) {
@@ -1082,7 +1084,7 @@ export function ConcertApp({
         </div>
       ) : null}
 
-      {error && tab !== "media" ? (
+      {error && tab !== "media" && tab !== "show-mc" ? (
         <div className="mt-3 rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {error}
           <Button
@@ -1253,6 +1255,12 @@ export function ConcertApp({
         </section>
       )}
 
+      {tab === "show-mc" && (
+        <section className="mt-5 flex-1">
+          <ShowMcBoard me={me} />
+        </section>
+      )}
+
       {tab === "media" && (
         <section className="mt-5 flex-1">
           <MediaBoard
@@ -1283,7 +1291,13 @@ export function ConcertApp({
       ) : null}
 
       <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-border/80 bg-background/95 px-1 pt-1.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md">
-        <div className="mx-auto grid max-w-3xl grid-cols-6 gap-0">
+        <div className="mx-auto grid max-w-3xl grid-cols-7 gap-0">
+          <NavButton
+            active={tab === "show-mc"}
+            icon={<Mic className="size-4" />}
+            label="MC"
+            onClick={() => setTab("show-mc")}
+          />
           <NavButton
             active={tab === "outreach"}
             icon={<Handshake className="size-4" />}
