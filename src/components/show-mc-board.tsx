@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Check, Clock3, Pencil, RotateCcw } from "lucide-react";
 
+import { McSortableCues } from "@/components/mc-sortable-cues";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -19,6 +20,7 @@ import { formatTime } from "@/lib/people";
 import {
   applyMcOverrides,
   chapterAtMinute,
+  chapterOrderIsCustom,
   cueMatchesSpeaker,
   EMPTY_MC_PROMPTS,
   findStockCue,
@@ -32,21 +34,12 @@ import {
   type McCue,
   type McSpeaker,
 } from "@/lib/show-mc";
-import type { McPromptStore } from "@/lib/types";
+import type { McPromptPatch, McPromptStore } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const DONE_KEY = "artcell-edmonton-mc-done";
 
 type SpeakerFilter = "all" | McSpeaker;
-
-type PromptPatch = {
-  id: string;
-  title?: string;
-  script?: string;
-  scriptBn?: string;
-  note?: string;
-  reset?: boolean;
-};
 
 function readDone(): string[] {
   try {
@@ -71,7 +64,7 @@ export function ShowMcBoard({
   me: string;
   concertDate?: string;
   prompts?: McPromptStore;
-  onSavePrompt: (input: PromptPatch) => Promise<void>;
+  onSavePrompt: (input: McPromptPatch) => Promise<void>;
 }) {
   const now = useShowNow();
   const [filter, setFilter] = useState<SpeakerFilter>("all");
@@ -92,7 +85,8 @@ export function ShowMcBoard({
   const iAmTn = /tanzim/i.test(me);
   const editedCount = Object.keys(prompts.cues).length;
 
-  const applied = useMemo(() => applyMcOverrides(MC_CHAPTERS, prompts.cues), [prompts]);
+  const applied = useMemo(() => applyMcOverrides(MC_CHAPTERS, prompts), [prompts]);
+  const canReorder = filter === "all";
 
   const chapters = useMemo(() => {
     return applied
@@ -143,7 +137,8 @@ export function ShowMcBoard({
           . One full sponsor each. Blue is you. Pink is RS. Same for the vote of thanks.
         </p>
         <p className="mt-2 text-sm text-foreground">
-          Tap Edit on any cue. Saves for both phones
+          Slide the grip to change order. Tap TN / RS / Both to switch who speaks. Edit saves the
+          wording. All of that is shared
           {editedCount ? ` · ${editedCount} line${editedCount === 1 ? "" : "s"} changed` : ""}.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -238,8 +233,18 @@ export function ShowMcBoard({
             done={done}
             showTicks={hydrated}
             prompts={prompts}
+            canReorder={canReorder}
             onToggle={toggle}
             onEdit={setEditing}
+            onSpeaker={(id, speaker) => {
+              void onSavePrompt({ id, speaker });
+            }}
+            onReorder={(order) => {
+              void onSavePrompt({ chapterId: chapter.id, order });
+            }}
+            onResetOrder={() => {
+              void onSavePrompt({ chapterId: chapter.id, resetOrder: true });
+            }}
           />
         ))
       )}
@@ -274,17 +279,26 @@ function ChapterCard({
   done,
   showTicks,
   prompts,
+  canReorder,
   onToggle,
   onEdit,
+  onSpeaker,
+  onReorder,
+  onResetOrder,
 }: {
   chapter: McChapter;
   live: boolean;
   done: string[];
   showTicks: boolean;
   prompts: McPromptStore;
+  canReorder: boolean;
   onToggle: (id: string) => void;
   onEdit: (cue: McCue) => void;
+  onSpeaker: (id: string, speaker: McSpeaker) => void;
+  onReorder: (order: string[]) => void;
+  onResetOrder: () => void;
 }) {
+  const customOrder = chapterOrderIsCustom(chapter.id, prompts);
   return (
     <section
       id={`mc-${chapter.id}`}
@@ -307,29 +321,42 @@ function ChapterCard({
         ) : null}
       </div>
       <p className="mt-2 text-sm text-muted-foreground">{chapter.summary}</p>
+      {!canReorder ? (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Switch to All cues to slide the order.
+        </p>
+      ) : customOrder ? (
+        <Button type="button" variant="ghost" className="mt-1 h-9 px-2" onClick={onResetOrder}>
+          <RotateCcw className="size-4" />
+          Reset this chapter’s order
+        </Button>
+      ) : null}
 
-      <ul className="mt-4 space-y-3">
-        {chapter.cues.map((cue) => {
+      <McSortableCues
+        items={chapter.cues}
+        disabled={!canReorder}
+        onReorder={onReorder}
+        render={(cue, handle) => {
           const ticked = showTicks && done.includes(cue.id);
           const edited = isMcCueOverridden(cue.id, prompts);
           const override = prompts.cues[cue.id];
           return (
-            <li key={cue.id}>
               <article
                 className={cn(
-                  "rounded-2xl border p-3",
+                  "flex gap-2 rounded-2xl border p-3",
                   ticked ? "border-border/60 bg-background/40 opacity-70" : speakerFrame(cue.speaker)
                 )}
               >
+                {handle}
+                <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <span className={speakerPill(cue.speaker)}>{speakerLabel(cue.speaker)}</span>
+                  <div className="min-w-0">
                     {edited ? (
-                      <span className="ml-2 inline-flex rounded-full bg-amber-400 px-2 py-0.5 text-xs font-semibold text-zinc-950">
+                      <span className="mb-2 inline-flex rounded-full bg-amber-400 px-2 py-0.5 text-xs font-semibold text-zinc-950">
                         Edited
                       </span>
                     ) : null}
-                    <h3 className="mt-2 text-base font-semibold leading-tight">{cue.title}</h3>
+                    <h3 className="text-base font-semibold leading-tight">{cue.title}</h3>
                   </div>
                   <div className="flex shrink-0 gap-2">
                     <Button
@@ -352,6 +379,11 @@ function ChapterCard({
                     </Button>
                   </div>
                 </div>
+                <SpeakerPick
+                  value={cue.speaker}
+                  className="mt-2"
+                  onChange={(speaker) => onSpeaker(cue.id, speaker)}
+                />
                 {cue.scriptBn ? (
                   <p
                     className={cn(
@@ -397,11 +429,11 @@ function ChapterCard({
                     {override.updatedBy ? ` · ${override.updatedBy}` : ""}
                   </p>
                 ) : null}
+                </div>
               </article>
-            </li>
           );
-        })}
-      </ul>
+        }}
+      />
     </section>
   );
 }
@@ -415,13 +447,14 @@ function McPromptEditor({
   cue: McCue | null;
   prompts: McPromptStore;
   onOpenChange: (open: boolean) => void;
-  onSave: (input: PromptPatch) => Promise<void>;
+  onSave: (input: McPromptPatch) => Promise<void>;
 }) {
   const stock = cue ? findStockCue(cue.id) : null;
   const [title, setTitle] = useState("");
   const [script, setScript] = useState("");
   const [scriptBn, setScriptBn] = useState("");
   const [note, setNote] = useState("");
+  const [speaker, setSpeaker] = useState<McSpeaker>("BOTH");
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState("");
 
@@ -431,6 +464,7 @@ function McPromptEditor({
     setScript(cue.script);
     setScriptBn(cue.scriptBn ?? "");
     setNote(cue.note ?? "");
+    setSpeaker(cue.speaker);
     setFormError("");
   }, [cue]);
 
@@ -444,7 +478,7 @@ function McPromptEditor({
       await onSave(
         reset
           ? { id: cue.id, reset: true }
-          : { id: cue.id, title, script, scriptBn, note }
+          : { id: cue.id, title, script, scriptBn, note, speaker }
       );
       onOpenChange(false);
     } catch (error) {
@@ -476,6 +510,12 @@ function McPromptEditor({
             void submit(false);
           }}
         >
+          <div>
+            <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              Who says it
+            </p>
+            <SpeakerPick value={speaker} className="mt-1" onChange={setSpeaker} />
+          </div>
           <label className="block text-xs font-medium tracking-wide text-muted-foreground uppercase">
             Title
             <Input
@@ -601,6 +641,55 @@ function SponsorCard({ chapters }: { chapters: McChapter[] }) {
         Then everyone on stage for the family photo.
       </p>
     </section>
+  );
+}
+
+function SpeakerPick({
+  value,
+  onChange,
+  className,
+}: {
+  value: McSpeaker;
+  onChange: (speaker: McSpeaker) => void;
+  className?: string;
+}) {
+  return (
+    <div className={cn("flex flex-wrap gap-1.5", className)}>
+      {(
+        [
+          { id: "TN", label: "TN" },
+          { id: "RS", label: "RS" },
+          { id: "BOTH", label: "Both" },
+        ] as { id: McSpeaker; label: string }[]
+      ).map((item) => {
+        const active = value === item.id;
+        return (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => {
+              if (!active) onChange(item.id);
+            }}
+            className={cn(
+              "h-9 rounded-full px-3 text-xs font-semibold",
+              active
+                ? item.id === "TN"
+                  ? "bg-sky-400 text-zinc-950"
+                  : item.id === "RS"
+                    ? "bg-pink-400 text-zinc-950"
+                    : "bg-secondary text-foreground"
+                : item.id === "TN"
+                  ? "border border-sky-400/50 text-sky-200"
+                  : item.id === "RS"
+                    ? "border border-pink-400/50 text-pink-200"
+                    : "border border-border text-muted-foreground"
+            )}
+          >
+            {item.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

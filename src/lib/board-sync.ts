@@ -236,8 +236,19 @@ export function mergeMcPrompts(
     }
   }
 
+  const orderWrite = lastWriteById?.get("mc:order") ?? 0;
+  const remoteAt = parseUpdatedAt(remote.updatedAt);
+  const keepLocalOrder =
+    pendingId === "order" || (orderWrite > 0 && remoteAt > 0 && remoteAt <= orderWrite);
+  const order = keepLocalOrder
+    ? (local.order ?? {})
+    : remoteStoreNewer
+      ? (remote.order ?? {})
+      : (local.order ?? remote.order ?? {});
+
   return {
     cues,
+    order,
     updatedAt: isRemoteNewer(local.updatedAt, remote.updatedAt)
       ? remote.updatedAt
       : local.updatedAt,

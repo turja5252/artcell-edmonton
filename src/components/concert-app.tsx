@@ -67,6 +67,7 @@ import type {
   GuestStatus,
   Lead,
   MediaItem,
+  McPromptPatch,
   McPromptStore,
   Member,
   Settings,
@@ -962,17 +963,42 @@ export function ConcertApp({
     }
   }
 
-  async function saveMcPrompt(input: {
-    id: string;
-    title?: string;
-    script?: string;
-    scriptBn?: string;
-    note?: string;
-    reset?: boolean;
-  }) {
+  async function saveMcPrompt(input: McPromptPatch) {
+    const now = new Date().toISOString();
+    const cueId = input.id?.trim() || "";
+    const reordering = Boolean(input.chapterId && (input.order || input.resetOrder));
     mcSaving.current = true;
-    busyIdRef.current = input.id;
+    busyIdRef.current = reordering ? "order" : cueId || null;
     markSaveStart();
+    setMcPrompts((current) => {
+      let cues = current.cues;
+      let order = current.order ?? {};
+      if (input.chapterId && input.resetOrder) {
+        const { [input.chapterId]: _removed, ...rest } = order;
+        order = rest;
+      } else if (input.chapterId && input.order) {
+        order = { ...order, [input.chapterId]: input.order };
+      }
+      if (cueId && input.reset) {
+        const { [cueId]: _removed, ...rest } = cues;
+        cues = rest;
+      } else if (cueId) {
+        cues = {
+          ...cues,
+          [cueId]: {
+            ...cues[cueId],
+            title: input.title !== undefined ? input.title : cues[cueId]?.title,
+            script: input.script !== undefined ? input.script : cues[cueId]?.script,
+            scriptBn: input.scriptBn !== undefined ? input.scriptBn : cues[cueId]?.scriptBn,
+            note: input.note !== undefined ? input.note : cues[cueId]?.note,
+            speaker: input.speaker !== undefined ? input.speaker : cues[cueId]?.speaker,
+            updatedAt: now,
+            updatedBy: me || null,
+          },
+        };
+      }
+      return { cues, order, updatedAt: now };
+    });
     try {
       const response = await fetch("/api/mc-prompts", {
         method: "PATCH",
@@ -982,13 +1008,29 @@ export function ConcertApp({
       const data = (await response.json()) as { mcPrompts?: McPromptStore; error?: string };
       if (!response.ok) throw new Error(data.error || "Could not save prompt");
       if (data.mcPrompts) {
-        noteSuccessfulWrite(
-          `mc:${input.id}`,
-          data.mcPrompts.cues[input.id]?.updatedAt ?? data.mcPrompts.updatedAt
-        );
+        if (reordering) noteSuccessfulWrite("mc:order", data.mcPrompts.updatedAt);
+        if (cueId) {
+          noteSuccessfulWrite(
+            `mc:${cueId}`,
+            data.mcPrompts.cues[cueId]?.updatedAt ?? data.mcPrompts.updatedAt
+          );
+        }
         setMcPrompts(data.mcPrompts);
       }
-      setToast(input.reset ? "Back to the original line" : "Prompt saved for both phones");
+      if (input.resetOrder) setToast("Chapter order reset");
+      else if (input.order) setToast("Order saved for both phones");
+      else if (input.reset) setToast("Back to the original line");
+      else if (input.speaker && input.title === undefined && input.script === undefined) {
+        setToast(
+          input.speaker === "TN"
+            ? "TN has this line"
+            : input.speaker === "RS"
+              ? "RS has this line"
+              : "Both of you have this line"
+        );
+      } else {
+        setToast("Prompt saved for both phones");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save prompt");
       throw err;

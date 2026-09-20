@@ -1,7 +1,7 @@
 import { daysUntilConcert, normalizeConcertDate } from "@/lib/concert-date";
-import type { McCueOverride, McPromptStore } from "@/lib/types";
+import type { McCueOverride, McPromptStore, McSpeaker } from "@/lib/types";
 
-export type McSpeaker = "TN" | "RS" | "BOTH";
+export type { McSpeaker };
 
 export type McLine = {
   speaker: Exclude<McSpeaker, "BOTH">;
@@ -616,10 +616,23 @@ export function cueMatchesSpeaker(cue: McCue, filter: "all" | McSpeaker): boolea
   return cue.speaker === filter;
 }
 
-export const EMPTY_MC_PROMPTS: McPromptStore = { cues: {}, updatedAt: null };
+export const EMPTY_MC_PROMPTS: McPromptStore = { cues: {}, order: {}, updatedAt: null };
+
+export function isMcSpeaker(value: unknown): value is McSpeaker {
+  return value === "TN" || value === "RS" || value === "BOTH";
+}
 
 export function isMcCueOverridden(id: string, store: McPromptStore | null | undefined): boolean {
-  return Boolean(store?.cues?.[id]);
+  const patch = store?.cues?.[id];
+  if (!patch) return false;
+  const stock = findStockCue(id);
+  if (!stock) return true;
+  if (patch.title !== undefined && patch.title.trim() !== stock.title) return true;
+  if (patch.script !== undefined && patch.script !== stock.script) return true;
+  if (patch.scriptBn !== undefined && patch.scriptBn !== (stock.scriptBn ?? "")) return true;
+  if (patch.note !== undefined && patch.note !== (stock.note ?? "")) return true;
+  if (patch.speaker && patch.speaker !== stock.speaker) return true;
+  return false;
 }
 
 export function allStockCues(): McCue[] {
@@ -630,23 +643,79 @@ export function findStockCue(id: string): McCue | null {
   return allStockCues().find((cue) => cue.id === id) ?? null;
 }
 
+export function findStockChapter(id: string): McChapter | null {
+  return MC_CHAPTERS.find((chapter) => chapter.id === id) ?? null;
+}
+
+export function stockChapterOrder(chapterId: string): string[] {
+  return findStockChapter(chapterId)?.cues.map((cue) => cue.id) ?? [];
+}
+
+export function sameCueOrder(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((id, index) => id === right[index]);
+}
+
+export function normalizeChapterOrder(chapter: McChapter, ids: string[]): string[] {
+  const allowed = new Set(chapter.cues.map((cue) => cue.id));
+  const next = ids.filter((id) => allowed.has(id));
+  for (const cue of chapter.cues) {
+    if (!next.includes(cue.id)) next.push(cue.id);
+  }
+  return next;
+}
+
+export function chapterOrderIsCustom(
+  chapterId: string,
+  store: McPromptStore | null | undefined
+): boolean {
+  const saved = store?.order?.[chapterId];
+  if (!saved?.length) return false;
+  return !sameCueOrder(saved, stockChapterOrder(chapterId));
+}
+
+function orderChapterCues(cues: McCue[], saved: string[] | undefined): McCue[] {
+  if (!saved?.length) return cues;
+  const byId = new Map(cues.map((cue) => [cue.id, cue]));
+  const next: McCue[] = [];
+  const seen = new Set<string>();
+  for (const id of saved) {
+    const cue = byId.get(id);
+    if (!cue || seen.has(id)) continue;
+    next.push(cue);
+    seen.add(id);
+  }
+  for (const cue of cues) {
+    if (!seen.has(cue.id)) next.push(cue);
+  }
+  return next;
+}
+
+function applyCueOverride(cue: McCue, patch: McCueOverride | undefined): McCue {
+  if (!patch) return cue;
+  return {
+    ...cue,
+    speaker: patch.speaker && isMcSpeaker(patch.speaker) ? patch.speaker : cue.speaker,
+    title: patch.title?.trim() || cue.title,
+    script: patch.script !== undefined ? patch.script : cue.script,
+    scriptBn: patch.scriptBn !== undefined ? patch.scriptBn : cue.scriptBn,
+    note: patch.note !== undefined ? patch.note : cue.note,
+  };
+}
+
 export function applyMcOverrides(
   chapters: McChapter[],
-  overrides: Record<string, McCueOverride> | undefined
+  store: McPromptStore | null | undefined
 ): McChapter[] {
-  if (!overrides || Object.keys(overrides).length === 0) return chapters;
+  const overrides = store?.cues;
+  const order = store?.order;
+  const hasOverrides = Boolean(overrides && Object.keys(overrides).length);
+  const hasOrder = Boolean(order && Object.keys(order).length);
+  if (!hasOverrides && !hasOrder) return chapters;
   return chapters.map((chapter) => ({
     ...chapter,
-    cues: chapter.cues.map((cue) => {
-      const patch = overrides[cue.id];
-      if (!patch) return cue;
-      return {
-        ...cue,
-        title: patch.title?.trim() || cue.title,
-        script: patch.script !== undefined ? patch.script : cue.script,
-        scriptBn: patch.scriptBn !== undefined ? patch.scriptBn : cue.scriptBn,
-        note: patch.note !== undefined ? patch.note : cue.note,
-      };
-    }),
+    cues: orderChapterCues(
+      chapter.cues.map((cue) => applyCueOverride(cue, overrides?.[cue.id])),
+      order?.[chapter.id]
+    ),
   }));
 }

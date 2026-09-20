@@ -160,18 +160,37 @@ export type MediaItem = {
   durationSeconds?: number | null;
 };
 
+export type McSpeaker = "TN" | "RS" | "BOTH";
+
 export type McCueOverride = {
   title?: string;
   script?: string;
   scriptBn?: string;
   note?: string;
+  speaker?: McSpeaker;
   updatedAt?: string;
   updatedBy?: string | null;
 };
 
 export type McPromptStore = {
   cues: Record<string, McCueOverride>;
+  /** Chapter id → cue ids in the order TN/RS want to speak them. */
+  order: Record<string, string[]>;
   updatedAt: string | null;
+};
+
+export type McPromptPatch = {
+  id?: string;
+  title?: string;
+  script?: string;
+  scriptBn?: string;
+  note?: string;
+  speaker?: McSpeaker;
+  reset?: boolean;
+  chapterId?: string;
+  order?: string[];
+  resetOrder?: boolean;
+  actor?: string | null;
 };
 
 export type BoardSnapshot = {

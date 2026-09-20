@@ -12,6 +12,7 @@ import type {
   LeadAttachment,
   LeadPatch,
   MediaItem,
+  McPromptPatch,
   McPromptStore,
   Member,
   MemberPatch,
@@ -412,6 +413,10 @@ function normalizeMcPrompts(raw: Partial<McPromptStore> | null | undefined): McP
         script: typeof value.script === "string" ? value.script : undefined,
         scriptBn: typeof value.scriptBn === "string" ? value.scriptBn : undefined,
         note: typeof value.note === "string" ? value.note : undefined,
+        speaker:
+          value.speaker === "TN" || value.speaker === "RS" || value.speaker === "BOTH"
+            ? value.speaker
+            : undefined,
         updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : undefined,
         updatedBy:
           typeof value.updatedBy === "string" && value.updatedBy.trim()
@@ -422,8 +427,16 @@ function normalizeMcPrompts(raw: Partial<McPromptStore> | null | undefined): McP
       };
     }
   }
+  const order: McPromptStore["order"] = {};
+  if (raw?.order && typeof raw.order === "object") {
+    for (const [chapterId, ids] of Object.entries(raw.order)) {
+      if (!chapterId || !Array.isArray(ids)) continue;
+      order[chapterId] = ids.filter((id): id is string => typeof id === "string" && Boolean(id));
+    }
+  }
   return {
     cues,
+    order,
     updatedAt: typeof raw?.updatedAt === "string" ? raw.updatedAt : null,
   };
 }
@@ -431,6 +444,7 @@ function normalizeMcPrompts(raw: Partial<McPromptStore> | null | undefined): McP
 async function readMcPromptsFile(): Promise<McPromptStore> {
   const parsed = await readJsonFile<McPromptStore>(MC_PROMPTS_FILE, {
     cues: {},
+    order: {},
     updatedAt: null,
   });
   return normalizeMcPrompts(parsed);
@@ -444,43 +458,70 @@ export function getMcPrompts(): Promise<McPromptStore> {
   return enqueue(readMcPromptsFile);
 }
 
-export function patchMcPrompt(input: {
-  id: string;
-  title?: string;
-  script?: string;
-  scriptBn?: string;
-  note?: string;
-  reset?: boolean;
-  actor?: string | null;
-}): Promise<McPromptStore> {
+export function patchMcPrompt(input: McPromptPatch): Promise<McPromptStore> {
   return enqueue(async () => {
-    const { findStockCue } = await import("@/lib/show-mc");
-    const stock = findStockCue(input.id);
-    if (!stock) throw new Error("That cue is not on the night");
+    const { findStockChapter, findStockCue, isMcSpeaker, normalizeChapterOrder, sameCueOrder } =
+      await import("@/lib/show-mc");
     const current = await readMcPromptsFile();
     const now = new Date().toISOString();
     const actor = input.actor?.trim() || null;
-    if (input.reset) {
-      const { [input.id]: _removed, ...rest } = current.cues;
-      const next = { cues: rest, updatedAt: now };
-      await writeMcPromptsFile(next);
-      return next;
+    let cues = current.cues;
+    let order = current.order;
+
+    if (input.chapterId) {
+      const chapter = findStockChapter(input.chapterId);
+      if (!chapter) throw new Error("That chapter is not on the night");
+      if (input.resetOrder) {
+        const { [input.chapterId]: _removed, ...rest } = order;
+        order = rest;
+      } else if (input.order) {
+        const nextOrder = normalizeChapterOrder(chapter, input.order);
+        if (sameCueOrder(nextOrder, chapter.cues.map((cue) => cue.id))) {
+          const { [input.chapterId]: _removed, ...rest } = order;
+          order = rest;
+        } else {
+          order = { ...order, [input.chapterId]: nextOrder };
+        }
+      }
     }
-    const next = {
-      cues: {
-        ...current.cues,
-        [input.id]: {
-          ...current.cues[input.id],
-          title: input.title !== undefined ? input.title : current.cues[input.id]?.title,
-          script: input.script !== undefined ? input.script : current.cues[input.id]?.script,
-          scriptBn: input.scriptBn !== undefined ? input.scriptBn : current.cues[input.id]?.scriptBn,
-          note: input.note !== undefined ? input.note : current.cues[input.id]?.note,
-          updatedAt: now,
-          updatedBy: actor,
-        },
-      },
-      updatedAt: now,
-    };
+
+    if (input.id) {
+      const stock = findStockCue(input.id);
+      if (!stock) throw new Error("That cue is not on the night");
+      if (input.reset) {
+        const { [input.id]: _removed, ...rest } = cues;
+        cues = rest;
+      } else if (
+        input.title !== undefined ||
+        input.script !== undefined ||
+        input.scriptBn !== undefined ||
+        input.note !== undefined ||
+        input.speaker !== undefined
+      ) {
+        if (input.speaker !== undefined && !isMcSpeaker(input.speaker)) {
+          throw new Error("Pick TN, RS, or both");
+        }
+        cues = {
+          ...cues,
+          [input.id]: {
+            ...cues[input.id],
+            title: input.title !== undefined ? input.title : cues[input.id]?.title,
+            script: input.script !== undefined ? input.script : cues[input.id]?.script,
+            scriptBn: input.scriptBn !== undefined ? input.scriptBn : cues[input.id]?.scriptBn,
+            note: input.note !== undefined ? input.note : cues[input.id]?.note,
+            speaker: input.speaker !== undefined ? input.speaker : cues[input.id]?.speaker,
+            updatedAt: now,
+            updatedBy: actor,
+          },
+        };
+      }
+    }
+
+    if (!input.id && !input.chapterId) {
+      throw new Error("Pick a cue to edit");
+    }
+
+    const next = { cues, order, updatedAt: now };
     await writeMcPromptsFile(next);
     return next;
   });
