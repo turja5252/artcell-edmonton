@@ -49,7 +49,7 @@ export const SPONSORS: SponsorRow[] = [
   { tier: "Bronze", name: "Mohsin Alam — Realtor" },
   { tier: "Bronze", name: "Top Donair and Poutine" },
   { tier: "Bronze", name: "Daily Bazar" },
-  { tier: "Digital media", name: "DEXCEL MEDIA" },
+  { tier: "Digital media", name: "DEXCEL MEDIA", note: "Anm Shams" },
   { tier: "Media", name: "Imran Kabir Photography" },
   { tier: "Promotional", name: "BCCB — Bangladeshi Canadian-Canadian Bangladeshi" },
   { tier: "Community", name: "Great Canadian Butcher" },
@@ -66,7 +66,7 @@ export const THANKS = {
   dhakaArchive: ["Raiyan", "Suddho", "Tahiat", "Jamal"],
   bccb: "Khaled Bari Novel",
   photo: "Imran Kabir",
-  digital: "DEXCEL MEDIA — still need the person’s name",
+  digital: "DEXCEL MEDIA — Anm Shams",
   volunteers: [
     "Sathi Saha",
     "Fahim",
@@ -104,9 +104,8 @@ export function thanksCues(): McCue[] {
     { id: "photo", title: "On the lens — Imran Kabir", script: "On the lens — Imran Kabir." },
     {
       id: "digital",
-      title: "Digital media — DEXCEL MEDIA",
-      script: "Digital media — DEXCEL MEDIA.",
-      note: "Still need the person’s name. Add it if you get it before 10:15.",
+      title: "Digital media — DEXCEL MEDIA, Anm Shams",
+      script: "Digital media — DEXCEL MEDIA, Anm Shams.",
     },
     {
       id: "volunteers",
