@@ -9,6 +9,7 @@ import {
   MC_CHAPTERS,
   SPONSOR_SPEECHES,
   SPONSORS,
+  spokenSponsor,
   thanksCues,
   chapterAtMinute,
   cueMatchesSpeaker,

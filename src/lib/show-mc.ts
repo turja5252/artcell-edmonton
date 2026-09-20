@@ -48,7 +48,7 @@ export const SPONSORS: SponsorRow[] = [
   { tier: "Silver", name: "Mahbub Mollah — Realtor" },
   { tier: "Bronze", name: "Mohsin Alam — Realtor" },
   { tier: "Bronze", name: "Top Donair and Poutine" },
-  { tier: "Bronze", name: "Daily Bazar" },
+  { tier: "Bronze", name: "Daily Bazar", note: "Saem Chowdhury" },
   { tier: "Digital media", name: "DEXCEL MEDIA", note: "Anm Shams" },
   { tier: "Media", name: "Imran Kabir Photography" },
   { tier: "Promotional", name: "BCCB — Bangladeshi Canadian-Canadian Bangladeshi" },
